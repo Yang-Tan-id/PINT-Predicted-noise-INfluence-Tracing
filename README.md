@@ -8,9 +8,9 @@ diffusion data-attribution experiments:
 - `celeba`: 100 queries, 50 checkpoints, and 192 LDS subsets.
 - `artbench2`: 60 queries, 25 checkpoints, and top-k removal evaluation.
 
-Experiment definitions live under `experiments/`. Shared implementation and
-launch scripts live outside the experiment folders under `src/`, `scripts/`,
-and `slurm/`.
+Experiment definitions and identical numbered entrypoints live under
+`experiments/`. Shared implementation remains outside those folders under
+`src/`, so experiment logic is not copied four times.
 
 ## Repository policy
 
@@ -53,21 +53,20 @@ for Shape3D and CelebA use the fixed `paper_5k` candidate manifests.
 
 ## Dataset preparation
 
-Shape3D and CelebA keep the existing dataset selection and preprocessing
-definitions. Install the optional preparation dependencies and run:
+Each experiment folder has the same ordered filenames. Install the optional
+preparation dependencies, then run the entrypoint in the dataset folder:
 
 ```bash
 python -m pip install -e ".[data]"
 
-python scripts/prepare_dataset.py --experiment shape3d \
-  --input /path/to/3dshapes.h5 \
-  --out-root "$PINT_DATA_ROOT/shape3d/20000"
-
-python scripts/prepare_dataset.py --experiment celeba \
-  --images-zip /path/to/img_align_celeba.zip \
-  --partition /path/to/list_eval_partition.txt \
-  --out-root "$PINT_DATA_ROOT/celeba/10000"
+python experiments/shape3d/00_prepare_dataset.py
+python experiments/shape3d/01_train_model.py --dry-run
 ```
+
+The preparation scripts use the standard paths documented below, so ordinary
+runs need no dataset-specific path arguments. All preparation loops retain
+their terminal progress bars. See [`experiments/README.md`](experiments/README.md)
+for the numbered workflow and current model-training backend status.
 
 Dataset preparation and attribution candidate selection are separate. Verify or
 recreate the fixed paper candidate manifests with:

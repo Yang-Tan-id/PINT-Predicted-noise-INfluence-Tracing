@@ -1,9 +1,11 @@
 schema_version: 1
 name: x3
 kind: generated
+prepared_size: 50000
 preparation:
   preserve_existing: true
   source: diffusion_jax_refined/x3
+  selection_seed: 67
 storage:
   environment_variable: PINT_DATA_ROOT
   relative_path: x3

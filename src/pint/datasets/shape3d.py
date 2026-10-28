@@ -7,6 +7,8 @@ from typing import Sequence
 
 import numpy as np
 
+from .paths import data_root
+
 
 SHAPE_NAMES = ("cube", "cylinder", "sphere", "capsule")
 GROUP_COLUMNS = (0, 1, 2, 4)
@@ -73,15 +75,23 @@ def build_conditions(ids: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    root = data_root()
     parser = argparse.ArgumentParser(description="Build the balanced 20k Shape3D dataset")
-    parser.add_argument("--input", type=Path, required=True)
-    parser.add_argument("--out-root", type=Path, required=True)
+    parser.add_argument(
+        "--input", type=Path, default=root / "raw" / "shape3d" / "3dshapes.h5"
+    )
+    parser.add_argument("--out-root", type=Path, default=root / "shape3d" / "20000")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--samples-per-group", type=int, default=5)
     parser.add_argument("--read-chunk-size", type=int, default=256)
     args = parser.parse_args(argv)
     if args.read_chunk_size <= 0:
         parser.error("--read-chunk-size must be positive")
+    if not args.input.is_file():
+        raise FileNotFoundError(
+            f"Shape3D source not found: {args.input}\n"
+            "See dataset_manifests/README.md for the official download location."
+        )
     try:
         import h5py
         from tqdm.auto import tqdm

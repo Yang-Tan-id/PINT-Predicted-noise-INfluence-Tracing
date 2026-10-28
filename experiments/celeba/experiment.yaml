@@ -9,6 +9,7 @@ sampling:
   preserve_existing: true
 training:
   checkpoint_count: 50
+  progress_bar: true
 method:
   name: pint
   timestamps: 100

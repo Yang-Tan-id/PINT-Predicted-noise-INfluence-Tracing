@@ -11,6 +11,18 @@ export PINT_DATA_ROOT=/path/to/pint-data
 mkdir -p "$PINT_DATA_ROOT/raw/shape3d" "$PINT_DATA_ROOT/raw/celeba"
 ```
 
+## x3
+
+x3 is generated locally and has no external download. Build the fixed 50,000
+row dataset (seed 67) with:
+
+```bash
+python experiments/x3/00_prepare_dataset.py
+```
+
+The CSV and metadata are written under `$PINT_DATA_ROOT/x3/`. The progress bar
+tracks generated samples.
+
 ## Shape3D
 
 The official Google DeepMind repository describes the dataset and links to the
@@ -30,9 +42,7 @@ Then build the fixed balanced 20,000-image experiment dataset:
 ```bash
 python -m pip install -e ".[data]"
 
-python scripts/prepare_dataset.py --experiment shape3d \
-  --input "$PINT_DATA_ROOT/raw/shape3d/3dshapes.h5" \
-  --out-root "$PINT_DATA_ROOT/shape3d/20000"
+python experiments/shape3d/00_prepare_dataset.py
 ```
 
 The preparation procedure uses seed 42 and selects five examples from each of
@@ -75,15 +85,33 @@ Build the fixed unconditional 10,000-image experiment dataset with:
 ```bash
 python -m pip install -e ".[data]"
 
-python scripts/prepare_dataset.py --experiment celeba \
-  --images-zip "$PINT_DATA_ROOT/raw/celeba/img_align_celeba.zip" \
-  --partition "$PINT_DATA_ROOT/raw/celeba/list_eval_partition.txt" \
-  --out-root "$PINT_DATA_ROOT/celeba/10000"
+python experiments/celeba/00_prepare_dataset.py
 ```
 
 The preparation procedure uses the official training partition, seed 42,
 center-crops each selected image to 140x140, and resizes it to 64x64 with
 bicubic interpolation.
+
+## ArtBench-2
+
+Place the ArtBench metadata and image-folder export at these standard paths:
+
+```text
+$PINT_DATA_ROOT/raw/artbench2/ArtBench-10.csv
+$PINT_DATA_ROOT/raw/artbench2/artbench-10-imagefolder/<label>/<filename>
+```
+
+The CSV must include `name`, `label`, and `split` columns. Prepare the fixed
+5,000 training and 1,000 validation rows with:
+
+```bash
+python experiments/artbench2/00_prepare_dataset.py
+```
+
+This writes indices and readable manifests under
+`$PINT_DATA_ROOT/artbench2/indices/`. It validates selected image paths with a
+progress bar. Use `--skip-image-check` only when preparing indices before the
+image files have been placed.
 
 ## Attribution candidate manifests
 

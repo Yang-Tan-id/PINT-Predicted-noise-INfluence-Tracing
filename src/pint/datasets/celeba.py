@@ -9,6 +9,8 @@ from typing import Sequence
 
 import numpy as np
 
+from .paths import data_root
+
 
 def read_partition(path: Path) -> dict[str, int]:
     partitions: dict[str, int] = {}
@@ -93,11 +95,20 @@ def zip_members_by_basename(archive: zipfile.ZipFile) -> dict[str, str]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    root = data_root()
     parser = argparse.ArgumentParser(description="Prepare the fixed 10k CelebA dataset")
-    parser.add_argument("--images-zip", type=Path, required=True)
-    parser.add_argument("--partition", type=Path, required=True)
+    parser.add_argument(
+        "--images-zip",
+        type=Path,
+        default=root / "raw" / "celeba" / "img_align_celeba.zip",
+    )
+    parser.add_argument(
+        "--partition",
+        type=Path,
+        default=root / "raw" / "celeba" / "list_eval_partition.txt",
+    )
     parser.add_argument("--attributes", type=Path)
-    parser.add_argument("--out-root", type=Path, required=True)
+    parser.add_argument("--out-root", type=Path, default=root / "celeba" / "10000")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--train-size", type=int, default=10_000)
     parser.add_argument("--crop-size", type=int, default=140)
@@ -105,6 +116,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.crop_size <= 0 or args.image_size <= 0:
         parser.error("--crop-size and --image-size must be positive")
+    missing = [path for path in (args.images_zip, args.partition) if not path.is_file()]
+    if missing:
+        raise FileNotFoundError(
+            f"CelebA source not found: {missing[0]}\n"
+            "See dataset_manifests/README.md for the official download location."
+        )
     try:
         from PIL import Image
         from tqdm.auto import tqdm
