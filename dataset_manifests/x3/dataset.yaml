@@ -7,5 +7,4 @@ preparation:
   source: diffusion_jax_refined/x3
   selection_seed: 67
 storage:
-  environment_variable: PINT_DATA_ROOT
-  relative_path: x3
+  relative_path: data/x3

@@ -7,5 +7,4 @@ preparation:
   source: diffusion_jax_refined/3dshapes/script/prepare_3dshapes.py
   selection_seed: 42
 storage:
-  environment_variable: PINT_DATA_ROOT
-  relative_path: shape3d
+  relative_path: data/shape3d

@@ -12,61 +12,34 @@ Experiment definitions and identical numbered entrypoints live under
 `experiments/`. Shared implementation remains outside those folders under
 `src/`, so experiment logic is not copied four times.
 
-## Repository policy
-
-Datasets, checkpoints, projected gradients, trajectories, and complete outputs
-are not committed to Git. Dataset preparation definitions and split manifests
-live under `dataset_manifests/`.
-
-Set external storage locations before running an experiment:
+## Run an experiment
 
 ```bash
-export PINT_DATA_ROOT=/path/to/pint-data
-export PINT_OUTPUT_ROOT=/path/to/pint-outputs
+python -m pip install -e ".[data]"
+cd experiments/shape3d
+python 00_prepare_dataset.py
+python 01_train_model.py --dry-run
 ```
 
-## Setup and validation
+Run the numbered files from top to bottom. By default, raw and prepared data go
+under `data/`, and experiment outputs go under `outputs/`. Both directories are
+ignored by Git. Preparation loops retain their terminal progress bars.
+
+See [`experiments/README.md`](experiments/README.md) for the current workflow
+and model-training backend status. See
+[`dataset_manifests/README.md`](dataset_manifests/README.md) for the few raw
+files that must be downloaded for Shape3D, CelebA, and ArtBench-2.
+
+## Validation
 
 ```bash
-python -m pip install -e .
 pint validate
 python -m unittest discover -s tests -v
 ```
 
-Display a resolved experiment definition:
-
-```bash
-pint show-config --experiment shape3d
-```
-
-Preview a run without executing a backend:
-
-```bash
-python scripts/compute_attribution.py \
-  --experiment shape3d \
-  --scope paper_5k \
-  --dry-run
-```
-
-Use `--scope all` to target every training datapoint. The paper configurations
-for Shape3D and CelebA use the fixed `paper_5k` candidate manifests.
-
-## Dataset preparation
-
-Each experiment folder has the same ordered filenames. Install the optional
-preparation dependencies, then run the entrypoint in the dataset folder:
-
-```bash
-python -m pip install -e ".[data]"
-
-python experiments/shape3d/00_prepare_dataset.py
-python experiments/shape3d/01_train_model.py --dry-run
-```
-
-The preparation scripts use the standard paths documented below, so ordinary
-runs need no dataset-specific path arguments. All preparation loops retain
-their terminal progress bars. See [`experiments/README.md`](experiments/README.md)
-for the numbered workflow and current model-training backend status.
+Use attribution scope `all` to target every training datapoint. The paper
+configurations for Shape3D and CelebA use the fixed `paper_5k` candidate
+manifests.
 
 Dataset preparation and attribution candidate selection are separate. Verify or
 recreate the fixed paper candidate manifests with:
@@ -75,10 +48,6 @@ recreate the fixed paper candidate manifests with:
 python scripts/prepare_attribution_scope.py --experiment shape3d
 python scripts/prepare_attribution_scope.py --experiment celeba
 ```
-
-See [`dataset_manifests/README.md`](dataset_manifests/README.md) for official
-download locations, required files, data-use notes, and complete preparation
-commands.
 
 The current commit establishes configuration, validation, dataset-manifest,
 scope-resolution, and launcher interfaces. Experiment backends are migrated

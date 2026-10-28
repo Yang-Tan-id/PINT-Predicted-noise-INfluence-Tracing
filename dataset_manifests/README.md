@@ -1,14 +1,10 @@
 # Dataset download and preparation
 
-Raw datasets and prepared image arrays are intentionally excluded from Git.
-Only experiment definitions, fixed attribution candidate manifests, checksums,
-and preparation code are versioned in this repository.
-
-Set one external data root before following the instructions below:
+Put downloaded source files under the repository's `data/raw/` directory. The
+whole `data/` directory is ignored by Git.
 
 ```bash
-export PINT_DATA_ROOT=/path/to/pint-data
-mkdir -p "$PINT_DATA_ROOT/raw/shape3d" "$PINT_DATA_ROOT/raw/celeba"
+mkdir -p data/raw/shape3d data/raw/celeba data/raw/artbench2
 ```
 
 ## x3
@@ -20,7 +16,7 @@ row dataset (seed 67) with:
 python experiments/x3/00_prepare_dataset.py
 ```
 
-The CSV and metadata are written under `$PINT_DATA_ROOT/x3/`. The progress bar
+The CSV and metadata are written under `data/x3/`. The progress bar
 tracks generated samples.
 
 ## Shape3D
@@ -34,7 +30,7 @@ Google Cloud Storage bucket containing `3dshapes.h5`:
 Download `3dshapes.h5` and place it at:
 
 ```text
-$PINT_DATA_ROOT/raw/shape3d/3dshapes.h5
+data/raw/shape3d/3dshapes.h5
 ```
 
 Then build the fixed balanced 20,000-image experiment dataset:
@@ -77,7 +73,7 @@ list_attr_celeba.txt
 Place the downloaded files under:
 
 ```text
-$PINT_DATA_ROOT/raw/celeba/
+data/raw/celeba/
 ```
 
 Build the fixed unconditional 10,000-image experiment dataset with:
@@ -97,8 +93,8 @@ bicubic interpolation.
 Place the ArtBench metadata and image-folder export at these standard paths:
 
 ```text
-$PINT_DATA_ROOT/raw/artbench2/ArtBench-10.csv
-$PINT_DATA_ROOT/raw/artbench2/artbench-10-imagefolder/<label>/<filename>
+data/raw/artbench2/ArtBench-10.csv
+data/raw/artbench2/artbench-10-imagefolder/<label>/<filename>
 ```
 
 The CSV must include `name`, `label`, and `split` columns. Prepare the fixed
@@ -109,7 +105,7 @@ python experiments/artbench2/00_prepare_dataset.py
 ```
 
 This writes indices and readable manifests under
-`$PINT_DATA_ROOT/artbench2/indices/`. It validates selected image paths with a
+`data/artbench2/indices/`. It validates selected image paths with a
 progress bar. Use `--skip-image-check` only when preparing indices before the
 image files have been placed.
 

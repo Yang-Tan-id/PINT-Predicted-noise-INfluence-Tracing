@@ -11,14 +11,15 @@ The filename determines the execution order and the parent folder determines
 the experiment. For example:
 
 ```bash
-export PINT_DATA_ROOT=/path/to/pint-data
-export PINT_OUTPUT_ROOT=/path/to/pint-outputs
 python -m pip install -e ".[data]"
 
 cd experiments/shape3d
 python 00_prepare_dataset.py
 python 01_train_model.py --dry-run
 ```
+
+No path configuration is required. Data defaults to the repository's `data/`
+directory and outputs default to `outputs/`; both are ignored by Git.
 
 Dataset preparation is connected and keeps its terminal progress bar. The
 training entrypoints currently resolve and display the fixed dataset path,

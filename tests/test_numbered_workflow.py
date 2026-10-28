@@ -49,6 +49,16 @@ class NumberedWorkflowTests(unittest.TestCase):
         self.assertEqual(art["checkpoint_count"], 25)
         self.assertTrue(shape["progress_bar"])
 
+    def test_paths_default_to_repository_directories(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            shape = training_plan("shape3d")
+        self.assertEqual(
+            shape["dataset"], str(repo_root() / "data" / "shape3d" / "20000" / "dataset.npz")
+        )
+        self.assertEqual(
+            shape["output"], str(repo_root() / "outputs" / "shape3d" / "model_training")
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

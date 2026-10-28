@@ -5,5 +5,4 @@ preparation:
   preserve_existing: true
   source: stable_diffusion_artbench_pytorch/src/sd_artbench/prepare_data.py
 storage:
-  environment_variable: PINT_DATA_ROOT
-  relative_path: artbench2
+  relative_path: data/artbench2

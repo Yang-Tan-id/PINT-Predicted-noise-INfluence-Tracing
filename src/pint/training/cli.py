@@ -6,18 +6,15 @@ import os
 from pathlib import Path
 from typing import Sequence
 
-from pint.config import EXPERIMENT_NAMES, load_experiment
+from pint.config import EXPERIMENT_NAMES, load_experiment, repo_root
 from pint.datasets.paths import data_root
 
 
 def output_root() -> Path:
     value = os.environ.get("PINT_OUTPUT_ROOT")
-    if not value:
-        raise RuntimeError(
-            "PINT_OUTPUT_ROOT is not set. Choose an external output directory, for example: "
-            "export PINT_OUTPUT_ROOT=/scratch/$USER/pint-outputs"
-        )
-    return Path(value).expanduser().resolve()
+    if value:
+        return Path(value).expanduser().resolve()
+    return repo_root() / "outputs"
 
 
 def training_plan(experiment: str) -> dict[str, object]:

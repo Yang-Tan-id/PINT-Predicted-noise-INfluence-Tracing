@@ -10,5 +10,4 @@ preparation:
   crop_size: 140
   image_size: 64
 storage:
-  environment_variable: PINT_DATA_ROOT
-  relative_path: celeba
+  relative_path: data/celeba

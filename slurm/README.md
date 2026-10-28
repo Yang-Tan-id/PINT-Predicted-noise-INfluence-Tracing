@@ -1,5 +1,5 @@
 # Cluster launchers
 
-Machine-specific launchers live here, outside experiment folders. Launchers
-must receive dataset and output roots through `PINT_DATA_ROOT` and
-`PINT_OUTPUT_ROOT`; they must not contain user-specific absolute paths.
+Machine-specific launchers live here, outside experiment folders. They use the
+same repository-local `data/` and `outputs/` directories as local runs and
+must not contain user-specific absolute paths.
