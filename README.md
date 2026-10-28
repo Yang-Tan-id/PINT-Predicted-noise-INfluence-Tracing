@@ -77,6 +77,10 @@ python scripts/prepare_attribution_scope.py --experiment shape3d
 python scripts/prepare_attribution_scope.py --experiment celeba
 ```
 
+See [`dataset_manifests/README.md`](dataset_manifests/README.md) for official
+download locations, required files, data-use notes, and complete preparation
+commands.
+
 The current commit establishes configuration, validation, dataset-manifest,
 scope-resolution, and launcher interfaces. Experiment backends are migrated
 into these interfaces one experiment at a time.
