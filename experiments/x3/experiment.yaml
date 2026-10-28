@@ -1,0 +1,24 @@
+schema_version: 1
+name: x3
+dataset:
+  manifest: dataset_manifests/x3/dataset.yaml
+queries:
+  count: 100
+  preserve_existing: true
+sampling:
+  preserve_existing: true
+training:
+  checkpoint_count: 50
+methods:
+  - name: das
+    timestamps: 100
+    samples_per_timestamp: 1
+    parameter_source: raw
+  - name: tracin
+    timestamps: 100
+    samples_per_timestamp: 1
+    parameter_source: raw
+lds:
+  enabled: true
+  num_subsets: 192
+  preserve_existing_training: true

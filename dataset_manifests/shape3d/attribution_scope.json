@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "experiment": "shape3d",
+  "name": "paper_5k",
+  "dataset_size": 20000,
+  "scope_size": 5000,
+  "selection": "numpy.default_rng(seed).choice(replace=False)",
+  "selection_seed": 42,
+  "files": {
+    "indices": {
+      "path": "attribution_5k_indices.npy",
+      "sha256": "ac1bfae0332205885d6d9496d0b3bbc6ef5bd9f5fc6f7106e9e87cfe60eb2c16"
+    }
+  }
+}

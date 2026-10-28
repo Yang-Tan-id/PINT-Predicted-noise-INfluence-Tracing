@@ -1,0 +1,26 @@
+schema_version: 1
+name: shape3d
+dataset:
+  manifest: dataset_manifests/shape3d/dataset.yaml
+queries:
+  count: 100
+  preserve_existing: true
+sampling:
+  preserve_existing: true
+training:
+  checkpoint_count: 50
+method:
+  name: pint
+  timestamps: 100
+  samples_per_timestamp: 1
+  parameter_source: raw
+attribution:
+  default_scope: paper_5k
+lds:
+  enabled: true
+  num_subsets: 192
+  candidate_scope: paper_5k
+  preserve_existing_training: true
+  retained_parameter_sources:
+    - raw
+    - adamw

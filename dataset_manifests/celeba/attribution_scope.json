@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "experiment": "celeba",
+  "name": "paper_5k",
+  "dataset_size": 10000,
+  "scope_size": 5000,
+  "selection": "numpy.default_rng(seed).choice(replace=False)",
+  "selection_seed": 42,
+  "files": {
+    "indices": {
+      "path": "attribution_5k_indices.npy",
+      "sha256": "8e6b914190f6cb2ca3888a21b63244d3b03585967bffd74eff489dd974a01434"
+    },
+    "mask": {
+      "path": "attribution_5k_mask.npy",
+      "sha256": "4ce1873c32da75b73a73ccd5ca2f81ea0565aee549d9f459ecc33e846a80e408"
+    }
+  }
+}

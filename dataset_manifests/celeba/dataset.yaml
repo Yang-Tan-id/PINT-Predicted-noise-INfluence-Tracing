@@ -1,0 +1,14 @@
+schema_version: 1
+name: celeba
+kind: external
+prepared_size: 10000
+preparation:
+  preserve_existing: true
+  source: diffusion_jax_refined/celeba/script/prepare_celeba.py
+  source_split: train
+  selection_seed: 42
+  crop_size: 140
+  image_size: 64
+storage:
+  environment_variable: PINT_DATA_ROOT
+  relative_path: celeba

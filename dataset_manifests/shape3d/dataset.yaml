@@ -1,0 +1,11 @@
+schema_version: 1
+name: shape3d
+kind: external
+prepared_size: 20000
+preparation:
+  preserve_existing: true
+  source: diffusion_jax_refined/3dshapes/script/prepare_3dshapes.py
+  selection_seed: 42
+storage:
+  environment_variable: PINT_DATA_ROOT
+  relative_path: shape3d

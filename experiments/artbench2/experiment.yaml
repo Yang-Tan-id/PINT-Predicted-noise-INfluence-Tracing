@@ -1,0 +1,20 @@
+schema_version: 1
+name: artbench2
+dataset:
+  manifest: dataset_manifests/artbench2/dataset.yaml
+queries:
+  count: 60
+  preserve_existing: true
+sampling:
+  preserve_existing: true
+training:
+  checkpoint_count: 25
+method:
+  name: pint
+  timestamps: 100
+  samples_per_timestamp: 1
+evaluation:
+  kind: topk_removal
+  topk: 1000
+lds:
+  enabled: false

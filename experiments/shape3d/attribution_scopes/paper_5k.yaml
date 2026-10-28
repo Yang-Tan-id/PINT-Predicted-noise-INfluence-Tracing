@@ -1,0 +1,5 @@
+name: paper_5k
+selection: explicit_indices
+indices: dataset_manifests/shape3d/attribution_5k_indices.npy
+expected_size: 5000
+selection_seed: 42
