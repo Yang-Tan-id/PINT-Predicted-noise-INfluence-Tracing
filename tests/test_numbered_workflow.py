@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import os
 import tempfile
 import unittest
@@ -9,7 +10,7 @@ from unittest.mock import patch
 
 from pint.config import EXPERIMENT_NAMES, repo_root
 from pint.datasets.x3 import generate_csv
-from pint.training.cli import training_plan
+from pint.training.cli import main as train_main, training_plan
 
 
 class NumberedWorkflowTests(unittest.TestCase):
@@ -36,6 +37,16 @@ class NumberedWorkflowTests(unittest.TestCase):
         self.assertEqual(rows[0]["id"], "0")
         self.assertEqual(set(rows[0]), {"id", *[f"tile_{i}" for i in range(1, 10)], "label_1", "label_2", "label_3"})
 
+    def test_x3_generator_matches_original_experiment_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "x3.csv"
+            generate_csv(path, num_samples=100, seed=67)
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        self.assertEqual(
+            digest,
+            "50f79ce13dfd61068cd8024aa08305b7adb7895baff7c060d1aaa24bf004b660",
+        )
+
     def test_training_plan_uses_fixed_checkpoint_count(self) -> None:
         with tempfile.TemporaryDirectory() as data, tempfile.TemporaryDirectory() as output:
             with patch.dict(
@@ -48,6 +59,13 @@ class NumberedWorkflowTests(unittest.TestCase):
         self.assertEqual(shape["checkpoint_count"], 50)
         self.assertEqual(art["checkpoint_count"], 25)
         self.assertTrue(shape["progress_bar"])
+        self.assertEqual(shape["backend_status"], "ready")
+        self.assertEqual(art["backend"], "minisd_lora")
+        self.assertEqual(art["pretrained_model"], "lambdalabs/miniSD-diffusers")
+        self.assertEqual(
+            art["pretrained_model_revision"],
+            "26ed8a9bfbf76f46a6cf60517dde321f900c44ce",
+        )
 
     def test_paths_default_to_repository_directories(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
@@ -58,6 +76,14 @@ class NumberedWorkflowTests(unittest.TestCase):
         self.assertEqual(
             shape["output"], str(repo_root() / "outputs" / "shape3d" / "model_training")
         )
+
+    def test_dry_run_resolves_requested_cuda_device(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                train_main(["--experiment", "x3", "--gpu-id", "3", "--dry-run"]),
+                0,
+            )
+            self.assertEqual(os.environ["CUDA_VISIBLE_DEVICES"], "3")
 
 
 if __name__ == "__main__":

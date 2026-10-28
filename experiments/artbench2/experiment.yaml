@@ -10,6 +10,8 @@ sampling:
 training:
   checkpoint_count: 25
   progress_bar: true
+  pretrained_model: lambdalabs/miniSD-diffusers
+  pretrained_model_revision: 26ed8a9bfbf76f46a6cf60517dde321f900c44ce
 method:
   name: pint
   timestamps: 100

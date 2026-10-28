@@ -95,9 +95,9 @@ def generate_csv(path: Path, num_samples: int, seed: int) -> None:
             # The original generator stores HSV-derived RGB values in a float32
             # grid, then converts each tile back to HSV while writing the CSV.
             # Preserve that round trip so the three-decimal CSV is byte-stable.
-            shape_rgb = np.asarray(colorsys.hsv_to_rgb(shape_hue, 0.8, 0.9), dtype=np.float32)
+            shape_rgb = np.asarray(colorsys.hsv_to_rgb(shape_hue, 0.9, 0.9), dtype=np.float32)
             background_rgb = np.asarray(
-                colorsys.hsv_to_rgb(background_hue, 0.8, 0.9), dtype=np.float32
+                colorsys.hsv_to_rgb(background_hue, 0.9, 0.9), dtype=np.float32
             )
             shape_stored_hue = colorsys.rgb_to_hsv(*shape_rgb)[0]
             background_stored_hue = colorsys.rgb_to_hsv(*background_rgb)[0]
