@@ -34,6 +34,7 @@ train-artbench = [
   "accelerate==0.20.3",
   "diffusers==0.16.1",
   "huggingface-hub==0.15.1",
+  "lpips==0.1.4",
   "pandas==1.5.3",
   "Pillow==9.5.0",
   "safetensors==0.3.1",

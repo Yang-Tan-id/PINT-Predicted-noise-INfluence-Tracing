@@ -101,6 +101,7 @@ class CIFAR10Dataset:
         channels_last: bool = True,
         exclude_ranges: Optional[Sequence[Tuple[int, int, int]]] = None,
         exclude_indices: Optional[Dict[int, Sequence[int]]] = None,
+        include_indices: Optional[Sequence[int]] = None,
         cond_mode: str = "class_id",
     ):
         self.root = root
@@ -112,6 +113,10 @@ class CIFAR10Dataset:
             for k, v in (exclude_indices.items() if exclude_indices is not None else [])
         }
         self.cond_mode = cond_mode
+        self.include_indices = (
+            None if include_indices is None
+            else np.asarray(include_indices, dtype=np.int64).reshape(-1)
+        )
 
         self._payload = self._load_payload(root)
         self.label_names = self._load_label_names()
@@ -129,6 +134,13 @@ class CIFAR10Dataset:
 
         x, y = self._load_arrays()
         x, y = self._apply_exclusions("dataset", x, y)
+        if self.include_indices is not None:
+            indices = self.include_indices
+            if indices.size == 0:
+                raise ValueError("include_indices cannot be empty")
+            if indices.min() < 0 or indices.max() >= len(x):
+                raise IndexError("include_indices are out of range")
+            x, y = x[indices], y[indices]
 
         if class_names is not None:
             keep_ids = np.array([self.name_to_id[name] for name in class_names], dtype=np.int32)
@@ -331,6 +343,7 @@ class TrainConfig:
     use_test: bool = False
     exclude_ranges: Optional[Tuple[Tuple[int, int, int], ...]] = None
     exclude_indices: Optional[Dict[int, Tuple[int, ...]]] = None
+    include_indices: Optional[Tuple[int, ...]] = None
 
     # model / diffusion
     model_type: str = "unet"
@@ -1244,6 +1257,7 @@ def train(cfg: TrainConfig):
         channels_last=True,
         exclude_ranges=cfg.exclude_ranges,
         exclude_indices=cfg.exclude_indices,
+        include_indices=cfg.include_indices,
         cond_mode=cfg.cond_mode,
     )
 

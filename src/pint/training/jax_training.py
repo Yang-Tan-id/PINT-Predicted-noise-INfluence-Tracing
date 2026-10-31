@@ -25,6 +25,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--num-devices", type=int)
     parser.add_argument("--no-bfloat16", action="store_true")
     parser.add_argument("--resume-from")
+    parser.add_argument("--train-indices", type=Path)
     args = parser.parse_args(argv)
 
     if args.dataset is None:
@@ -37,6 +38,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     if args.num_checkpoints < 1 or args.num_checkpoints > args.epochs:
         parser.error("--num-checkpoints must be between 1 and --epochs")
+    train_indices = None
+    if args.train_indices is not None:
+        if not args.train_indices.is_file():
+            parser.error(f"train indices not found: {args.train_indices}")
+        train_indices = tuple(
+            int(value) for value in np.asarray(np.load(args.train_indices), dtype=np.int64).reshape(-1)
+        )
     save_epochs = evenly_spaced_epochs(args.epochs, args.num_checkpoints)
 
     with np.load(args.dataset, allow_pickle=False) as payload:
@@ -45,6 +53,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         data_root=str(args.dataset),
         batch_names=None,
         class_names=None,
+        include_indices=train_indices,
         use_test=False,
         model_type="unet",
         image_size=64,

@@ -69,7 +69,12 @@ def _plan(command: str, experiment: str, scope_name: str | None) -> dict:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if raw_argv and raw_argv[0] in ("train-lds", "evaluate"):
+        from pint.evaluation.cli import main as evaluation_main
+
+        return evaluation_main(raw_argv[1:])
+    args = build_parser().parse_args(raw_argv)
     root = repo_root()
     if args.command == "validate":
         for name in EXPERIMENT_NAMES:

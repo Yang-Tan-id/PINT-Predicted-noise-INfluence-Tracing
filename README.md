@@ -3,11 +3,10 @@
 This repository contains the reproducible experiment framework for four
 diffusion data-attribution experiments:
 
-- `x3`: 100 prompted queries, 50 checkpoints, 192 LDS subsets, and top-k removal
-  evaluation.
+- `x3`: 100 prompted queries, 50 checkpoints, and 192 LDS subsets.
 - `shape3d`: 100 prompted queries, 50 checkpoints, and 192 LDS subsets.
 - `celeba`: 100 prompted queries, 50 checkpoints, and 192 LDS subsets.
-- `artbench2`: 60 prompted queries, 25 checkpoints, and top-k removal evaluation.
+- `artbench2`: 60 prompted queries and 25 checkpoints.
 
 ## Setup and run an experiment
 
@@ -126,6 +125,28 @@ Use the same baseline method for attribution as for its query-gradient run:
 ```bash
 python 04_compute_attribution.py --method gas --gpu-id 0
 ```
+
+### 11. Train evaluation models
+
+```bash
+python 05_train_evaluation_models.py --gpu-ids 0,1,2,3
+```
+
+For x3, Shape3D, and CelebA:
+
+- Trains the 192 paper LDS subsets.
+- Saves trajectory-deviation targets.
+
+For ArtBench-2:
+
+- Retrains a top-1000 removal model for every available query.
+- Generates the full-data and removal images and latent trajectories, then
+  reports endpoint MSE, trajectory MSE, pixel L2, CLIP distance, DINO distance,
+  and LPIPS.
+- Uses PINT by default; select a baseline with `--method gas`,
+  `--method tracincp`, or `--method retrac`.
+- Evaluates raw and AdamW scores by default; select one with
+  `--parameter-source raw` or `--parameter-source adamw`.
 
 ## Validation
 

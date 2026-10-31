@@ -46,7 +46,10 @@ def _update_ema(ema_model, model, decay: float) -> None:
 
 def _train_family(args: argparse.Namespace, family: str) -> None:
     _set_seed(args.seed)
-    dataset = ColorGridDataset(str(args.dataset), grid_size=3)
+    train_indices = None
+    if args.train_indices is not None:
+        train_indices = np.asarray(np.load(args.train_indices), dtype=np.int64).reshape(-1)
+    dataset = ColorGridDataset(str(args.dataset), grid_size=3, indices=train_indices)
     loader = DataLoader(
         dataset,
         batch_size=args.batch_size,
@@ -103,14 +106,14 @@ def _train_family(args: argparse.Namespace, family: str) -> None:
     )
     visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES")
     metadata = {
-        "kind": "base",
+        "kind": "lds" if train_indices is not None else "base",
         "family": family,
         "seed": int(args.seed),
         "gpu": int(visible_devices.split(",")[0]) if visible_devices else None,
         "base_csv": str(args.dataset),
-        "mask_path": None,
-        "lds_seed": None,
-        "subset_id": None,
+        "mask_path": None if args.train_indices is None else str(args.train_indices),
+        "lds_seed": args.lds_seed,
+        "subset_id": args.subset_id,
         "n_train": len(dataset),
     }
     meta_path.write_text(
@@ -182,7 +185,7 @@ def _train_family(args: argparse.Namespace, family: str) -> None:
                 "time_dim": args.time_embedding_dim,
                 "family": family,
                 "unprompted": family == "unprompted",
-                "train_indices": None,
+                "train_indices": train_indices,
                 "config": checkpoint_config,
                 # ReTrac batch1 restores these states and replays only the
                 # sampled datapoint/timestep/noise events in the next interval.
@@ -215,11 +218,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--time-embedding-dim", type=int, default=128)
     parser.add_argument("--num-checkpoints", type=int, default=50)
     parser.add_argument("--num-workers", type=int, default=0)
+    parser.add_argument("--train-indices", type=Path)
+    parser.add_argument("--lds-seed", type=int)
+    parser.add_argument("--subset-id", type=int)
     args = parser.parse_args(argv)
     if not args.dataset.is_file():
         parser.error(f"dataset not found: {args.dataset}; run experiments/x3/00_prepare_dataset.py first")
     if args.num_checkpoints < 1 or args.num_checkpoints > args.epochs:
         parser.error("--num-checkpoints must be between 1 and --epochs")
+    if args.train_indices is not None and not args.train_indices.is_file():
+        parser.error(f"train indices not found: {args.train_indices}")
     families = ("prompted", "unprompted") if args.family == "both" else (args.family,)
     for family in families:
         _train_family(args, family)

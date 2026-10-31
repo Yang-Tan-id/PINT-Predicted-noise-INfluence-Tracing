@@ -24,4 +24,7 @@ methods:
 lds:
   enabled: true
   num_subsets: 192
+  subset_size: 12500
+  subset_group_seeds: [0, 1, 2]
+  parameter_source: ema
   preserve_existing_training: true

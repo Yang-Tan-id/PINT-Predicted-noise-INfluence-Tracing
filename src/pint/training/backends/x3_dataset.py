@@ -1,7 +1,7 @@
 
 import csv
 import colorsys
-from typing import List, Tuple
+from typing import List, Sequence, Tuple
 
 import numpy as np
 import torch
@@ -21,6 +21,7 @@ class ColorGridDataset(Dataset):
         fixed_s: float = 0.9,
         fixed_v: float = 0.9,
         label_start: int | None = None,  # <-- optional override
+        indices: Sequence[int] | None = None,
     ):
         self.csv_path = csv_path
         self.grid_size = int(grid_size)
@@ -34,6 +35,13 @@ class ColorGridDataset(Dataset):
         self.rows: List[List[str]] = []
         self.vocab = {}
         self._load()
+        if indices is not None:
+            selected = np.asarray(indices, dtype=np.int64).reshape(-1)
+            if selected.size == 0:
+                raise ValueError("indices cannot be empty")
+            if selected.min() < 0 or selected.max() >= len(self.rows):
+                raise IndexError("dataset indices are out of range")
+            self.rows = [self.rows[int(index)] for index in selected]
 
     def _load(self):
         with open(self.csv_path, newline="") as fh:
