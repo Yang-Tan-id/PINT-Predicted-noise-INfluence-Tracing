@@ -4,14 +4,24 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import numpy as np
 
-from pint.attribution.cli import attribution_plan
+from pint.attribution.cli import attribution_plan, main
 from pint.attribution.common import datapoint_shard, merge_shards, save_shard
 
 
 class AttributionTests(unittest.TestCase):
+    @patch("pint.baselines.attribution_cli.main")
+    def test_numbered_attribution_entrypoint_dispatches_baseline_method(
+        self, baseline_main: Mock
+    ) -> None:
+        baseline_main.return_value = 0
+        arguments = ["--experiment", "celeba", "--method", "retrac", "--dry-run"]
+        self.assertEqual(main(arguments), 0)
+        baseline_main.assert_called_once_with(arguments)
+
     def test_datapoint_shards_are_balanced_contiguous_and_complete(self) -> None:
         shards = [datapoint_shard(10, index, 3) for index in range(3)]
         self.assertEqual(

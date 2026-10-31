@@ -75,6 +75,15 @@ class QueryGradientTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             main(["--experiment", "x3", "--timesteps", "50", "--dry-run"])
 
+    @patch("pint.baselines.query_cli.main")
+    def test_numbered_query_entrypoint_dispatches_baseline_method(
+        self, baseline_main: Mock
+    ) -> None:
+        baseline_main.return_value = 0
+        arguments = ["--experiment", "shape3d", "--method", "gas", "--dry-run"]
+        self.assertEqual(main(arguments), 0)
+        baseline_main.assert_called_once_with(arguments)
+
     def test_manifest_rejects_mixed_projection_runs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

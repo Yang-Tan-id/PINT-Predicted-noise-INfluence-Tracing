@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from pint.baselines.common import BASELINE_METHODS
 from pint.config import EXPERIMENT_NAMES
 from pint.query_gradients.common import normalization_for, timestep_count_for
 from pint.training.cli import output_root
@@ -36,10 +37,24 @@ def query_gradient_plan(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    method_parser = argparse.ArgumentParser(add_help=False)
+    method_parser.add_argument(
+        "--method", choices=("pint", *BASELINE_METHODS), default="pint"
+    )
+    selected_method, _ = method_parser.parse_known_args(argv)
+    if selected_method.method != "pint":
+        from pint.baselines.query_cli import main as baseline_main
+
+        return baseline_main(argv)
+
     parser = argparse.ArgumentParser(
         description="Compute PINT gradients for the complete query bank"
     )
     parser.add_argument("--experiment", required=True, choices=EXPERIMENT_NAMES)
+    parser.add_argument(
+        "--method", choices=("pint", *BASELINE_METHODS), default="pint"
+    )
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--projection-dim", type=int, default=4096)
     gpu_group = parser.add_mutually_exclusive_group()

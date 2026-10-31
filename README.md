@@ -105,10 +105,10 @@ projection with `--projection-dim N`. PINT uses 100 timesteps for x3 and
 Shape3D, and 50 for CelebA and ArtBench-2, matching query sampling. Use
 `--gpu-ids 0,1,2,3` to split consecutive checkpoint ranges across GPUs.
 
-For baseline queries, set the baseline tag to `gas`, `tracincp`, or `retrac`:
+For a baseline, add `--method gas`, `--method tracincp`, or `--method retrac`:
 
 ```bash
-python ../../scripts/methods/01_compute_queries.py --experiment shape3d --method gas --gpu-id 0
+python 03_compute_query_gradients.py --method gas --gpu-id 0
 ```
 
 ### 10. Compute attribution
@@ -121,10 +121,10 @@ Use `--batch-size N` to adjust datapoint batching and `--gpu-ids 0,1,2,3` for
 multiple GPUs. Raw-gradient and AdamW scores are saved by default; add
 `--no-adamw` to save raw-gradient scores only.
 
-Use the same baseline tag for attribution as for its query run:
+Use the same baseline method for attribution as for its query-gradient run:
 
 ```bash
-python ../../scripts/methods/02_compute_attribution.py --experiment shape3d --method gas --gpu-id 0
+python 04_compute_attribution.py --method gas --gpu-id 0
 ```
 
 ## Validation
