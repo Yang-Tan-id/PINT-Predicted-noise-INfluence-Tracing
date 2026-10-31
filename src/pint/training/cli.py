@@ -18,7 +18,9 @@ def output_root() -> Path:
     return repo_root() / "outputs"
 
 
-def training_plan(experiment: str) -> dict[str, object]:
+def training_plan(
+    experiment: str, checkpoint_count: int | None = None
+) -> dict[str, object]:
     config = load_experiment(experiment)
     dataset_paths = {
         "x3": data_root() / "x3" / "67_50000.csv",
@@ -29,14 +31,18 @@ def training_plan(experiment: str) -> dict[str, object]:
     backends = {
         "x3": "pytorch_pixel_ddpm",
         "shape3d": "jax_pixel_ddpm",
-        "celeba": "jax_pixel_ddpm_unconditional",
+        "celeba": "jax_pixel_ddpm_attr40",
         "artbench2": "minisd_lora",
     }
     plan = {
         "experiment": experiment,
         "dataset": str(dataset_paths[experiment]),
         "output": str(output_root() / experiment / "model_training"),
-        "checkpoint_count": config["training"]["checkpoint_count"],
+        "checkpoint_count": (
+            config["training"]["checkpoint_count"]
+            if checkpoint_count is None
+            else checkpoint_count
+        ),
         "progress_bar": True,
         "backend": backends[experiment],
         "backend_status": "ready",
@@ -58,6 +64,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="print the resolved training plan without starting training",
     )
+    parser.add_argument(
+        "--num-checkpoints",
+        type=int,
+        help="number of evenly spaced checkpoints; the final epoch is always included",
+    )
     gpu_group = parser.add_mutually_exclusive_group()
     gpu_group.add_argument(
         "--gpu-id",
@@ -69,6 +80,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="comma-separated physical CUDA device IDs for a multi-GPU backend",
     )
     args, backend_args = parser.parse_known_args(argv)
+    if args.num_checkpoints is not None and not 1 <= args.num_checkpoints <= 200:
+        parser.error("--num-checkpoints must be between 1 and 200")
     if args.gpu_id is not None:
         if args.gpu_id < 0:
             parser.error("--gpu-id must be a non-negative integer")
@@ -78,13 +91,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not values or any(not value.isdigit() for value in values):
             parser.error("--gpu-ids must be a comma-separated list of non-negative integers")
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(values)
-    plan = training_plan(args.experiment)
+    plan = training_plan(args.experiment, args.num_checkpoints)
     print(json.dumps(plan, indent=2))
     if args.dry_run:
         return 0
 
     if "--output-dir" not in backend_args:
         backend_args.extend(["--output-dir", str(plan["output"])])
+    if args.num_checkpoints is not None:
+        backend_args.extend(["--num-checkpoints", str(args.num_checkpoints)])
     if args.experiment == "x3":
         from pint.training.x3_training import main as train_x3
 

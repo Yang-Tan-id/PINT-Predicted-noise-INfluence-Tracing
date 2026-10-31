@@ -22,6 +22,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from pint.config import repo_root
 from pint.datasets.paths import data_root
+from pint.training.checkpoints import evenly_spaced_epochs
 from pint.training.model_versions import ARTBENCH_MODEL_ID, ARTBENCH_MODEL_REVISION
 
 
@@ -118,19 +119,6 @@ def set_attention_dropout(unet: UNet2DConditionModel, probability: float) -> Non
             module.p = probability
 
 
-def checkpoint_epochs(num_epochs: int, num_checkpoints: int) -> set[int]:
-    """Return exactly ``num_checkpoints`` approximately even, 1-based epochs."""
-
-    if num_checkpoints < 1:
-        raise ValueError("num_checkpoints must be at least 1")
-    if num_checkpoints > num_epochs:
-        raise ValueError("num_checkpoints cannot exceed num_epochs")
-    return {
-        math.ceil(checkpoint_number * num_epochs / num_checkpoints)
-        for checkpoint_number in range(1, num_checkpoints + 1)
-    }
-
-
 def resolve_resume_checkpoint(output_dir: Path, value: str) -> Path:
     """Resolve an explicit checkpoint path or the latest epoch checkpoint."""
 
@@ -144,6 +132,19 @@ def resolve_resume_checkpoint(output_dir: Path, value: str) -> Path:
     if not checkpoints:
         raise FileNotFoundError(f"No checkpoint-epoch-* directories found in {output_dir}")
     return checkpoints[-1]
+
+
+def ensure_model_seed_directory(output_dir: Path, seed: int) -> None:
+    """Prevent multiple training seeds from sharing one LoRA output directory."""
+
+    config_path = output_dir / "training_config.json"
+    if config_path.is_file():
+        existing_seed = int(json.loads(config_path.read_text(encoding="utf-8"))["seed"])
+        if existing_seed != seed:
+            raise RuntimeError(
+                f"Refusing to mix ArtBench-2 model seeds in {output_dir}: "
+                f"existing seed {existing_seed}, requested seed {seed}"
+            )
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -199,6 +200,8 @@ def main(argv=None) -> None:
             f"ArtBench-2 training input not found: {missing[0]}. "
             "Run experiments/artbench2/00_prepare_dataset.py first."
         )
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    ensure_model_seed_directory(args.output_dir, args.seed)
     accelerator = Accelerator(
         mixed_precision=args.mixed_precision,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -275,7 +278,9 @@ def main(argv=None) -> None:
         / (accelerator.num_processes * args.gradient_accumulation_steps)
     )
     total_steps = updates_per_epoch * args.epochs
-    epochs_to_checkpoint = checkpoint_epochs(args.epochs, args.num_checkpoints)
+    epochs_to_checkpoint = set(
+        evenly_spaced_epochs(args.epochs, args.num_checkpoints)
+    )
     lr_scheduler = get_scheduler(
         "cosine",
         optimizer=optimizer,
@@ -287,7 +292,6 @@ def main(argv=None) -> None:
         lora_layers, optimizer, dataloader, lr_scheduler
     )
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
     first_epoch = 0
     global_step = 0
     if args.resume_from_checkpoint:
@@ -301,6 +305,11 @@ def main(argv=None) -> None:
             )
         accelerator.load_state(str(resume_path))
         training_state = json.loads(state_path.read_text(encoding="utf-8"))
+        if "seed" in training_state and int(training_state["seed"]) != args.seed:
+            raise RuntimeError(
+                f"Resume checkpoint seed {training_state['seed']} does not match "
+                f"requested model seed {args.seed}"
+            )
         first_epoch = int(training_state["completed_epoch"])
         global_step = int(training_state["global_step"])
         accelerator.print(
@@ -309,6 +318,14 @@ def main(argv=None) -> None:
         )
 
     if accelerator.is_main_process:
+        training_config = {
+            key: str(value) if isinstance(value, Path) else value
+            for key, value in vars(args).items()
+        }
+        (args.output_dir / "training_config.json").write_text(
+            json.dumps(training_config, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         (args.output_dir / "pretrained_model.json").write_text(
             json.dumps(
                 {
@@ -414,11 +431,16 @@ def main(argv=None) -> None:
                     args.output_dir / f"checkpoint-epoch-{completed_epoch:04d}"
                 )
                 accelerator.save_state(str(checkpoint_path))
+                # Keep a framework-native LoRA snapshot next to the full
+                # Accelerator state. Attribution restores only these trainable
+                # weights, avoiding a costly optimizer-state restore per query.
+                unet.save_attn_procs(checkpoint_path / "lora")
                 (checkpoint_path / "training_state.json").write_text(
                     json.dumps(
                         {
                             "completed_epoch": completed_epoch,
                             "global_step": global_step,
+                            "seed": int(args.seed),
                             "pretrained_model": args.model,
                             "pretrained_model_revision": args.model_revision,
                         },

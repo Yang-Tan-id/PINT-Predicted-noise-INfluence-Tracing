@@ -18,6 +18,7 @@ from tqdm.auto import tqdm
 from pint.datasets.paths import data_root
 from pint.training.backends import x3_model
 from pint.training.backends.x3_dataset import ColorGridDataset
+from pint.training.checkpoints import evenly_spaced_epochs
 
 
 def _set_seed(seed: int) -> None:
@@ -74,11 +75,19 @@ def _train_family(args: argparse.Namespace, family: str) -> None:
         weight_decay=args.weight_decay,
     )
     total_steps = args.epochs * len(loader)
-    checkpoint_every = max(1, args.epochs // args.num_checkpoints)
+    checkpoint_epochs = set(evenly_spaced_epochs(args.epochs, args.num_checkpoints))
     # Keep the original experiment layout because downstream attribution scripts
     # resolve baseline checkpoints as MODEL_DIR/base/<family>/epoch_XXXX.pt.
     output_dir = args.output_dir / "base" / family
     output_dir.mkdir(parents=True, exist_ok=True)
+    meta_path = output_dir / "meta.json"
+    if meta_path.is_file():
+        existing_seed = int(json.loads(meta_path.read_text(encoding="utf-8"))["seed"])
+        if existing_seed != args.seed:
+            raise RuntimeError(
+                f"Refusing to mix x3 model seeds in {output_dir}: "
+                f"existing seed {existing_seed}, requested seed {args.seed}"
+            )
     manifest = vars(args).copy()
     manifest.update(
         family=family,
@@ -104,7 +113,7 @@ def _train_family(args: argparse.Namespace, family: str) -> None:
         "subset_id": None,
         "n_train": len(dataset),
     }
-    (output_dir / "meta.json").write_text(
+    meta_path.write_text(
         json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
     )
 
@@ -138,8 +147,9 @@ def _train_family(args: argparse.Namespace, family: str) -> None:
             running_loss += loss.detach().item()
             progress.set_postfix(loss=f"{running_loss / batch_index:.5f}", lr=f"{rate:.2e}")
 
-        if epoch % checkpoint_every == 0 or epoch == args.epochs:
+        if epoch in checkpoint_epochs:
             checkpoint_config = {
+                "seed": int(args.seed),
                 "batch_size": args.batch_size,
                 "epochs": args.epochs,
                 "learning_rate": args.learning_rate,
@@ -161,6 +171,7 @@ def _train_family(args: argparse.Namespace, family: str) -> None:
                 "optimizer_state": optimizer.state_dict(),
                 "epoch": epoch,
                 "global_step": global_step,
+                "seed": int(args.seed),
                 "eta": float(rate),
                 "learning_rate_at_checkpoint": float(rate),
                 "T": args.timesteps,
@@ -181,7 +192,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Train the x3 pixel DDPM")
     parser.add_argument("--dataset", type=Path, default=data_root() / "x3" / "67_50000.csv")
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--family", choices=("prompted", "unprompted", "both"), default="both")
+    parser.add_argument(
+        "--family", choices=("prompted", "unprompted", "both"), default="prompted"
+    )
     parser.add_argument("--device", default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--seed", type=int, default=67)
     parser.add_argument("--epochs", type=int, default=200)
@@ -201,8 +214,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(f"dataset not found: {args.dataset}; run experiments/x3/00_prepare_dataset.py first")
     if args.num_checkpoints < 1 or args.num_checkpoints > args.epochs:
         parser.error("--num-checkpoints must be between 1 and --epochs")
-    if args.epochs % args.num_checkpoints:
-        parser.error("--epochs must be divisible by --num-checkpoints")
     families = ("prompted", "unprompted") if args.family == "both" else (args.family,)
     for family in families:
         _train_family(args, family)

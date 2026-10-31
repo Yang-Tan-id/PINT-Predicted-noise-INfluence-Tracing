@@ -3,14 +3,11 @@
 This repository contains the reproducible experiment framework for four
 diffusion data-attribution experiments:
 
-- `x3`: 100 queries, 50 checkpoints, and 192 LDS subsets.
-- `shape3d`: 100 queries, 50 checkpoints, and 192 LDS subsets.
-- `celeba`: 100 queries, 50 checkpoints, and 192 LDS subsets.
-- `artbench2`: 60 queries, 25 checkpoints, and top-k removal evaluation.
-
-Experiment definitions and identical numbered entrypoints live under
-`experiments/`. Shared implementation remains outside those folders under
-`src/`, so experiment logic is not copied four times.
+- `x3`: 100 prompted queries, 50 checkpoints, 192 LDS subsets, and top-k removal
+  evaluation.
+- `shape3d`: 100 prompted queries, 50 checkpoints, and 192 LDS subsets.
+- `celeba`: 100 prompted queries, 50 checkpoints, and 192 LDS subsets.
+- `artbench2`: 60 prompted queries, 25 checkpoints, and top-k removal evaluation.
 
 ## Setup and run an experiment
 
@@ -42,8 +39,7 @@ python -m pip install -r requirements.txt
 ```
 
 This installs the data-preparation dependencies and all four training
-backends. Dataset-specific installation options are documented in
-[`experiments/README.md`](experiments/README.md).
+backends.
 
 ### 4. Download the dataset
 
@@ -78,38 +74,50 @@ and selected CUDA device without loading the model.
 python 01_train_model.py --gpu-id 0
 ```
 
-Use `--gpu-id N` to select one physical GPU. JAX multi-GPU training accepts,
-for example, `--gpu-ids 0,1,2,3`. Checkpoints are written under
-`outputs/<dataset>/model_training/`.
+- Pixel experiments save 50 evenly spaced checkpoints by default; ArtBench-2
+  saves 25. The final epoch is always included. Change the count with
+  `--num-checkpoints N`.
+- GPU selection: `--gpu-id N`; JAX multi-GPU: `--gpu-ids 0,1,2,3`.
 
-ArtBench-2 fine-tunes the Hugging Face model
-[`lambdalabs/miniSD-diffusers`](https://huggingface.co/lambda/miniSD-diffusers)
-at the pinned revision
-`26ed8a9bfbf76f46a6cf60517dde321f900c44ce`. The first ArtBench-2 training run
-downloads that exact snapshot automatically and later runs reuse the Hugging
-Face cache. Pass `--model` and `--model-revision` only when intentionally
-running a different base-model version.
+Checkpoints are written under `outputs/<dataset>/model_training/`.
 
-The `data/` and `outputs/` directories are ignored by Git.
+### 8. Sample queries
+
+```bash
+python 02_sample_queries.py --gpu-id 0
+```
+
+By default, this samples 100 queries for x3, Shape3D, and CelebA, or 60 for
+ArtBench-2. Results are saved to `outputs/<dataset>/queries/`.
+
+- Change the number of queries with `--num-queries N`.
+- Change the starting sampling seed with `--seed N` (default: `0`).
+
+### 9. Compute query gradients
+
+```bash
+python 03_compute_query_gradients.py --gpu-id 0
+```
+
+This runs PINT over the complete query bank in checkpoint-major order. Adjust
+query batching with `--batch-size N` and change the default 4096-dimensional
+projection with `--projection-dim N`. PINT uses 100 timesteps for x3 and
+Shape3D, and 50 for CelebA and ArtBench-2, matching query sampling. Use
+`--gpu-ids 0,1,2,3` to split consecutive checkpoint ranges across GPUs.
 
 ## Validation
+
+Validate the setup and run the unit tests:
 
 ```bash
 pint validate
 python -m unittest discover -s tests -v
 ```
 
-Use attribution scope `all` to target every training datapoint. The paper
-configurations for Shape3D and CelebA use the fixed `paper_5k` candidate
-manifests.
+## Notes
 
-Dataset preparation and attribution candidate selection are separate. Verify or
-recreate the fixed paper candidate manifests with:
-
-```bash
-python scripts/prepare_attribution_scope.py --experiment shape3d
-python scripts/prepare_attribution_scope.py --experiment celeba
-```
-
-The numbered training entrypoint dispatches to the paper backend for each
-dataset.
+- ArtBench-2 uses
+  [`lambdalabs/miniSD-diffusers`](https://huggingface.co/lambda/miniSD-diffusers)
+  at revision `26ed8a9bfbf76f46a6cf60517dde321f900c44ce`. The first run downloads it;
+  later runs reuse the Hugging Face cache.
+- The `data/` and `outputs/` directories are ignored by Git.

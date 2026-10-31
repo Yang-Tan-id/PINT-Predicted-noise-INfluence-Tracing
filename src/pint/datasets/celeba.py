@@ -107,7 +107,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         default=root / "raw" / "celeba" / "list_eval_partition.txt",
     )
-    parser.add_argument("--attributes", type=Path)
+    parser.add_argument(
+        "--attributes",
+        type=Path,
+        default=root / "raw" / "celeba" / "list_attr_celeba.txt",
+    )
     parser.add_argument("--out-root", type=Path, default=root / "celeba" / "10000")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--train-size", type=int, default=10_000)
@@ -116,7 +120,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.crop_size <= 0 or args.image_size <= 0:
         parser.error("--crop-size and --image-size must be positive")
-    missing = [path for path in (args.images_zip, args.partition) if not path.is_file()]
+    missing = [
+        path
+        for path in (args.images_zip, args.partition, args.attributes)
+        if not path.is_file()
+    ]
     if missing:
         raise FileNotFoundError(
             f"CelebA source not found: {missing[0]}\n"

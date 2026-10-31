@@ -24,8 +24,18 @@ class NumberedWorkflowTests(unittest.TestCase):
             (root / name / "01_train_model.py").read_text(encoding="utf-8")
             for name in EXPERIMENT_NAMES
         }
+        sample_contents = {
+            (root / name / "02_sample_queries.py").read_text(encoding="utf-8")
+            for name in EXPERIMENT_NAMES
+        }
+        query_gradient_contents = {
+            (root / name / "03_compute_query_gradients.py").read_text(encoding="utf-8")
+            for name in EXPERIMENT_NAMES
+        }
         self.assertEqual(len(prepare_contents), 1)
         self.assertEqual(len(train_contents), 1)
+        self.assertEqual(len(sample_contents), 1)
+        self.assertEqual(len(query_gradient_contents), 1)
 
     def test_x3_generator_writes_expected_rows(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -55,17 +65,22 @@ class NumberedWorkflowTests(unittest.TestCase):
                 clear=False,
             ):
                 shape = training_plan("shape3d")
+                celeba = training_plan("celeba")
                 art = training_plan("artbench2")
         self.assertEqual(shape["checkpoint_count"], 50)
         self.assertEqual(art["checkpoint_count"], 25)
         self.assertTrue(shape["progress_bar"])
         self.assertEqual(shape["backend_status"], "ready")
         self.assertEqual(art["backend"], "minisd_lora")
+        self.assertEqual(celeba["backend"], "jax_pixel_ddpm_attr40")
         self.assertEqual(art["pretrained_model"], "lambdalabs/miniSD-diffusers")
         self.assertEqual(
             art["pretrained_model_revision"],
             "26ed8a9bfbf76f46a6cf60517dde321f900c44ce",
         )
+
+    def test_training_plan_accepts_custom_checkpoint_count(self) -> None:
+        self.assertEqual(training_plan("shape3d", 7)["checkpoint_count"], 7)
 
     def test_paths_default_to_repository_directories(self) -> None:
         with patch.dict(os.environ, {}, clear=True):

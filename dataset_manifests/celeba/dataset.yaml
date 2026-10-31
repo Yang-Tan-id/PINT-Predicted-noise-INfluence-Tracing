@@ -7,6 +7,7 @@ preparation:
   source: diffusion_jax_refined/celeba/script/prepare_celeba.py
   source_split: train
   selection_seed: 42
+  conditioning: 40-way multi-hot attributes
   crop_size: 140
   image_size: 64
 storage:

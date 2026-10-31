@@ -4,8 +4,11 @@ import argparse
 from pathlib import Path
 from typing import Sequence
 
+import numpy as np
+
 from pint.datasets.paths import data_root
 from pint.training.backends.jax_pixel import TrainConfig, train
+from pint.training.checkpoints import evenly_spaced_epochs
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -34,10 +37,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     if args.num_checkpoints < 1 or args.num_checkpoints > args.epochs:
         parser.error("--num-checkpoints must be between 1 and --epochs")
-    if args.epochs % args.num_checkpoints:
-        parser.error("--epochs must be divisible by --num-checkpoints")
+    save_epochs = evenly_spaced_epochs(args.epochs, args.num_checkpoints)
 
-    unconditional = args.experiment == "celeba"
+    with np.load(args.dataset, allow_pickle=False) as payload:
+        num_classes = len(payload["label_names"])
     config = TrainConfig(
         data_root=str(args.dataset),
         batch_names=None,
@@ -50,8 +53,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         channel_mults=(1, 2, 2),
         num_res_blocks=2,
         time_emb_dim=128,
-        num_classes=1 if unconditional else 34,
-        class_cond=not unconditional,
+        num_classes=num_classes,
+        class_cond=True,
         cond_mode="multi_hot",
         dropout=0.1,
         seed=args.seed,
@@ -76,7 +79,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         use_data_parallel=True,
         num_devices=args.num_devices,
         checkpoint_dir=str(args.output_dir),
-        save_every_epochs=args.epochs // args.num_checkpoints,
+        save_every_epochs=0,
+        save_epochs=save_epochs,
         keep_last_k=None,
         resume_from=args.resume_from,
         num_workers=0,

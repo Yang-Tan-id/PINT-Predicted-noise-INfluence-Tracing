@@ -42,6 +42,26 @@ class TrainingDispatchTests(unittest.TestCase):
             ["--output-dir", str(output), "--family", "prompted"]
         )
 
+    def test_custom_checkpoint_count_is_forwarded_to_backend(self) -> None:
+        module, entrypoint = self.fake_module("pint.training.x3_training")
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "x3"
+            with patch.dict(sys.modules, {module.__name__: module}):
+                result = main(
+                    [
+                        "--experiment",
+                        "x3",
+                        "--output-dir",
+                        str(output),
+                        "--num-checkpoints",
+                        "7",
+                    ]
+                )
+        self.assertEqual(result, 0)
+        entrypoint.assert_called_once_with(
+            ["--output-dir", str(output), "--num-checkpoints", "7"]
+        )
+
     def test_shape3d_dispatches_to_jax_backend(self) -> None:
         module, entrypoint = self.fake_module("pint.training.jax_training")
         with tempfile.TemporaryDirectory() as directory:

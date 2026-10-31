@@ -13,7 +13,7 @@ Download the external datasets into the following locations. The entire
 | Dataset | Download | Required location |
 | --- | --- | --- |
 | Shape3D | Download `3dshapes.h5` from the [official Google DeepMind page](https://github.com/google-deepmind/3d-shapes#download-data-file-from-google-cloud-storage). | `data/raw/shape3d/3dshapes.h5` |
-| CelebA | Accept the terms on the [official CelebA page](https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html), then download **Align&Cropped Images** (`img_align_celeba.zip`) and **Train/Val/Test Partitions** (`list_eval_partition.txt`). | `data/raw/celeba/img_align_celeba.zip` and `data/raw/celeba/list_eval_partition.txt` |
+| CelebA | Accept the terms on the [official CelebA page](https://mmlab.ie.cuhk.edu.hk/projects/CelebA.html), then download **Align&Cropped Images**, **Train/Val/Test Partitions**, and **Attribute Annotations**. | `data/raw/celeba/img_align_celeba.zip`, `data/raw/celeba/list_eval_partition.txt`, and `data/raw/celeba/list_attr_celeba.txt` |
 | ArtBench-2 | From the [official ArtBench repository](https://github.com/liaopeiyuan/artbench#accessing-dataset), download **Metadata** and the 256x256 **ImageFolder** archive. Rename the metadata file to `ArtBench-10.csv` if needed, and extract the image archive. | `data/raw/artbench2/ArtBench-10.csv` and `data/raw/artbench2/artbench-10-imagefolder/<label>/<filename>` |
 
 `x3` requires no download. After placing the external files, run the

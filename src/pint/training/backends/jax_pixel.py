@@ -375,6 +375,7 @@ class TrainConfig:
     # checkpoint / resume
     checkpoint_dir: str = "./models/cifar10_checkpoints"
     save_every_epochs: int = 1
+    save_epochs: Optional[Tuple[int, ...]] = None
     keep_last_k: int = None
     resume_from: Optional[str] = None
 
@@ -1420,7 +1421,12 @@ def train(cfg: TrainConfig):
             # ----------------------------
             # save checkpoint
             # ----------------------------
-            if cfg.save_every_epochs > 0 and (epoch % cfg.save_every_epochs == 0):
+            should_save = (
+                epoch in cfg.save_epochs
+                if cfg.save_epochs is not None
+                else cfg.save_every_epochs > 0 and epoch % cfg.save_every_epochs == 0
+            )
+            if should_save:
                 save_state = jax_utils.unreplicate(state) if use_pmap else state
                 _save_checkpoint(
                     checkpoint_dir=cfg.checkpoint_dir,
