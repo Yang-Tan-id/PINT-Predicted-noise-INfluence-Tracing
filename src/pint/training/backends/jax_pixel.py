@@ -757,13 +757,23 @@ class TrainState(train_state.TrainState):
     rng: jax.Array
 
 
-def _save_checkpoint(checkpoint_dir: str, epoch: int, state: TrainState, cfg: TrainConfig, keep_last_k: int = 5):
+def _save_checkpoint(
+    checkpoint_dir: str,
+    epoch: int,
+    state: TrainState,
+    cfg: TrainConfig,
+    keep_last_k: int = 5,
+    replay_rngs: Any | None = None,
+):
     os.makedirs(checkpoint_dir, exist_ok=True)
     ckpt_path = os.path.join(checkpoint_dir, f"seed_{cfg.seed}_epoch_{epoch:04d}.ckpt")
     payload = {
         "epoch": int(epoch),
         "config": asdict(cfg),
         "state_bytes": to_bytes(state),
+        "replay_rngs": (
+            None if replay_rngs is None else np.asarray(jax.device_get(replay_rngs))
+        ),
     }
     with open(ckpt_path, "wb") as f:
         pickle.dump(payload, f)
@@ -1432,6 +1442,7 @@ def train(cfg: TrainConfig):
                     checkpoint_dir=cfg.checkpoint_dir,
                     epoch=epoch,
                     state=save_state,
+                    replay_rngs=(state.rng if use_pmap else save_state.rng[None, :]),
                     cfg=cfg,
                     keep_last_k=cfg.keep_last_k,
                 )

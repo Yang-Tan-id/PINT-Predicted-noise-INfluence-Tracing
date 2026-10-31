@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import pickle
 import re
 from pathlib import Path
@@ -127,6 +128,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         import jax
         import jax.numpy as jnp
         from flax.serialization import from_bytes
+        from tqdm.auto import tqdm
     except ImportError as exc:
         raise SystemExit("Shape3D/CelebA query gradients require train-jax") from exc
     from pint.training.backends.jax_pixel import (
@@ -209,6 +211,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Projection arrays are dynamic arguments, so one compiled executable is
     # reused across checkpoints even though every checkpoint has its own seed.
     batch_function = _batch_function(model, args.projection_dim)
+    progress = tqdm(
+        total=(
+            len(pair_indices)
+            * math.ceil(len(queries) / args.batch_size)
+            * math.ceil(len(timesteps) / args.timestamp_chunk_size)
+        ),
+        desc=f"{args.experiment} query gradients shard {args.shard_index + 1}/{args.shard_count}",
+        unit="batch-chunk",
+        dynamic_ncols=True,
+    )
     for checkpoint_index in pair_indices:
         target_state, _ = _restore_checkpoint(
             str(checkpoints[checkpoint_index + 1]), template
@@ -217,6 +229,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_path = part_path(args.output_dir, checkpoint_index)
         if output_path.is_file():
             current_params = target_params
+            progress.update(
+                math.ceil(len(queries) / args.batch_size)
+                * math.ceil(len(timesteps) / args.timestamp_chunk_size)
+            )
             continue
         projection_specs = _projection_specs(
             current_params,
@@ -272,6 +288,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 )
                 feature_chunks.append(np.asarray(jax.device_get(features)))
                 norm_chunks.append(np.asarray(jax.device_get(norms)))
+                progress.update(1)
             features = np.concatenate(feature_chunks, axis=1)[:real_count]
             checkpoint_gradient_norms.append(
                 np.linalg.norm(features, axis=-1).astype(np.float32)
@@ -299,6 +316,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             projection_dim=np.asarray(args.projection_dim, dtype=np.int32),
         )
         current_params = target_params
+    progress.close()
     return 0
 
 

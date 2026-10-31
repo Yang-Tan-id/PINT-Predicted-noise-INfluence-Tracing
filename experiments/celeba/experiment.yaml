@@ -12,7 +12,7 @@ training:
   progress_bar: true
 method:
   name: pint
-  timestamps: 100
+  timestamps: 50
   samples_per_timestamp: 1
   parameter_source: raw
 attribution:

@@ -91,7 +91,7 @@ By default, this samples 100 queries for x3, Shape3D, and CelebA, or 60 for
 ArtBench-2. Results are saved to `outputs/<dataset>/queries/`.
 
 - Change the number of queries with `--num-queries N`.
-- Change the starting sampling seed with `--seed N` (default: `0`).
+- Change the starting sampling seed with `--seed N`. The default is the paper seed.
 
 ### 9. Compute query gradients
 
@@ -104,6 +104,28 @@ query batching with `--batch-size N` and change the default 4096-dimensional
 projection with `--projection-dim N`. PINT uses 100 timesteps for x3 and
 Shape3D, and 50 for CelebA and ArtBench-2, matching query sampling. Use
 `--gpu-ids 0,1,2,3` to split consecutive checkpoint ranges across GPUs.
+
+For baseline queries, set the baseline tag to `gas`, `tracincp`, or `retrac`:
+
+```bash
+python ../../scripts/methods/01_compute_queries.py --experiment shape3d --method gas --gpu-id 0
+```
+
+### 10. Compute attribution
+
+```bash
+python 04_compute_attribution.py --gpu-id 0
+```
+
+Use `--batch-size N` to adjust datapoint batching and `--gpu-ids 0,1,2,3` for
+multiple GPUs. Raw-gradient and AdamW scores are saved by default; add
+`--no-adamw` to save raw-gradient scores only.
+
+Use the same baseline tag for attribution as for its query run:
+
+```bash
+python ../../scripts/methods/02_compute_attribution.py --experiment shape3d --method gas --gpu-id 0
+```
 
 ## Validation
 

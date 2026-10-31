@@ -48,3 +48,26 @@ class CountSketchProjector:
         for gradient, (buckets, signs) in zip(gradients, self.specs):
             output.index_add_(0, buckets, signs * gradient.reshape(-1).float())
         return output * self.scale
+
+    def project_batch(self, gradients):
+        """Project a gradient tree with a shared leading example axis."""
+        import torch
+
+        if len(gradients) != len(self.specs):
+            raise ValueError("gradient and CountSketch parameter counts differ")
+        batch_size = gradients[0].shape[0]
+        if any(gradient.shape[0] != batch_size for gradient in gradients):
+            raise ValueError("batched gradients must share their leading axis")
+        output = torch.zeros(
+            (batch_size, self.dimension),
+            device=gradients[0].device,
+            dtype=torch.float32,
+        )
+        for gradient, (buckets, signs) in zip(gradients, self.specs):
+            flat = gradient.reshape(batch_size, -1).float()
+            output.scatter_add_(
+                1,
+                buckets.unsqueeze(0).expand(batch_size, -1),
+                flat * signs.unsqueeze(0),
+            )
+        return output * self.scale

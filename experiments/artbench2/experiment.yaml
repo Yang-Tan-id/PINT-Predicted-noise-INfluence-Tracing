@@ -14,7 +14,7 @@ training:
   pretrained_model_revision: 26ed8a9bfbf76f46a6cf60517dde321f900c44ce
 method:
   name: pint
-  timestamps: 100
+  timestamps: 50
   samples_per_timestamp: 1
 evaluation:
   kind: topk_removal

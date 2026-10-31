@@ -184,6 +184,12 @@ def _train_family(args: argparse.Namespace, family: str) -> None:
                 "unprompted": family == "unprompted",
                 "train_indices": None,
                 "config": checkpoint_config,
+                # ReTrac batch1 restores these states and replays only the
+                # sampled datapoint/timestep/noise events in the next interval.
+                "torch_rng_state": torch.get_rng_state(),
+                "cuda_rng_state_all": (
+                    torch.cuda.get_rng_state_all() if torch.cuda.is_available() else None
+                ),
             }
             torch.save(checkpoint, output_dir / f"epoch_{epoch:04d}.pt")
 

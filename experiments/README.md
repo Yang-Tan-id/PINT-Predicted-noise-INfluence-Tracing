@@ -7,6 +7,7 @@ Every experiment folder exposes the same ordered entrypoints:
 01_train_model.py
 02_sample_queries.py
 03_compute_query_gradients.py
+04_compute_attribution.py
 ```
 
 The filename determines the execution order and the parent folder determines
@@ -20,6 +21,7 @@ python 00_prepare_dataset.py
 python 01_train_model.py
 python 02_sample_queries.py
 python 03_compute_query_gradients.py
+python 04_compute_attribution.py
 ```
 
 No path configuration is required. Data defaults to the repository's `data/`

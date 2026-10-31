@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from pathlib import Path
 from typing import Sequence
@@ -105,6 +106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         import torch
         from diffusers import DDPMScheduler
         from transformers import CLIPTextModel, CLIPTokenizer
+        from tqdm.auto import tqdm
     except ImportError as exc:
         raise SystemExit("ArtBench-2 query gradients require train-artbench") from exc
     if not torch.cuda.is_available():
@@ -213,6 +215,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             hidden_bank.extend(hidden.detach().cpu())
             query_ids.extend(int(query["query_id"]) for query in batch)
 
+    progress = tqdm(
+        total=(
+            len(pair_indices)
+            * math.ceil(len(queries) / args.batch_size)
+            * len(timesteps)
+        ),
+        desc=f"ArtBench-2 query gradients shard {args.shard_index + 1}/{args.shard_count}",
+        unit="batch-timestep",
+        dynamic_ncols=True,
+    )
     for checkpoint_index in pair_indices:
         target_layers = _load_lora_checkpoint(
             target_unet, target_layers, checkpoints[checkpoint_index + 1]
@@ -221,6 +233,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if output_path.is_file():
             current_unet, target_unet = target_unet, current_unet
             current_layers, target_layers = target_layers, current_layers
+            progress.update(math.ceil(len(queries) / args.batch_size) * len(timesteps))
             continue
         active = [parameter for parameter in current_layers.parameters() if parameter.requires_grad]
         projector = CountSketchProjector(
@@ -280,6 +293,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                     timestep_norms.append(delta_norm.item())
                 batch_features.append(np.stack(timestep_features))
                 batch_norms.append(np.asarray(timestep_norms, dtype=np.float32))
+                progress.update(1)
             features = np.stack(batch_features, axis=1)
             checkpoint_gradient_norms.append(
                 np.linalg.norm(features, axis=-1).astype(np.float32)
@@ -306,6 +320,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         current_unet, target_unet = target_unet, current_unet
         current_layers, target_layers = target_layers, current_layers
+    progress.close()
     return 0
 
 

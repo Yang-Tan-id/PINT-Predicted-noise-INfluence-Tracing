@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import re
 from pathlib import Path
 from typing import Sequence
@@ -14,10 +15,10 @@ from pint.query_gradients.common import (
     checkpoint_pair_range,
     part_path,
     read_query_manifest,
-    stable_torch_seed,
     timestep_grid,
     validate_sampled_timesteps,
     write_run_manifest,
+    x3_tracin_das_noise_seed,
 )
 from pint.query_gradients.torch_projector import CountSketchProjector
 
@@ -71,6 +72,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         import torch
+        from tqdm.auto import tqdm
     except ImportError as exc:
         raise SystemExit("x3 query gradients require the train-x3 dependencies") from exc
     if args.batch_size <= 0 or args.projection_dim <= 0:
@@ -129,6 +131,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         conditions.append(condition)
         query_ids.append(int(query["query_id"]))
 
+    progress = tqdm(
+        total=(
+            len(pair_indices)
+            * math.ceil(len(queries) / args.batch_size)
+            * len(timesteps)
+        ),
+        desc=f"x3 query gradients shard {args.shard_index + 1}/{args.shard_count}",
+        unit="batch-timestep",
+        dynamic_ncols=True,
+    )
     for checkpoint_index in pair_indices:
         target_model, target_payload = _build_model(
             checkpoints[checkpoint_index + 1], device
@@ -139,6 +151,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if output_path.is_file():
             current_model = target_model
             current_payload = target_payload
+            progress.update(math.ceil(len(queries) / args.batch_size) * len(timesteps))
             continue
 
         active = [parameter for parameter in current_model.parameters() if parameter.requires_grad]
@@ -146,15 +159,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             active,
             args.projection_dim,
             model_seed,
-            "traj_tracin_projection",
+            "tracin_das_parameter_projection",
             checkpoint_index,
         )
         generator = torch.Generator(device=device)
         noise_by_timestep = []
-        for timestep in timesteps:
+        for timestamp_index, timestep in enumerate(timesteps):
             generator.manual_seed(
-                stable_torch_seed(
-                    model_seed, checkpoint_index, int(timestep), "query_noise"
+                x3_tracin_das_noise_seed(
+                    checkpoint_index,
+                    len(timesteps) - 1 - timestamp_index,
+                    int(timestep),
                 )
             )
             noise_by_timestep.append(
@@ -187,7 +202,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 timestep_features = []
                 timestep_norms = []
                 for local_index in range(x0.shape[0]):
-                    scalar = (prediction[local_index] * delta[local_index]).sum()
+                    delta_norm = delta[local_index].float().norm()
+                    direction = delta[local_index].float() / delta_norm.clamp_min(1e-12)
+                    scalar = (prediction[local_index].float() * direction).sum()
                     gradients = torch.autograd.grad(
                         scalar,
                         active,
@@ -195,9 +212,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                         allow_unused=False,
                     )
                     timestep_features.append(projector(gradients).detach().cpu().numpy())
-                    timestep_norms.append(delta[local_index].float().norm().item())
+                    timestep_norms.append(delta_norm.item())
                 batch_features.append(np.stack(timestep_features))
                 batch_norms.append(np.asarray(timestep_norms, dtype=np.float32))
+                progress.update(1)
             all_features.append(np.stack(batch_features, axis=1))
             all_delta_norms.append(np.stack(batch_norms, axis=1))
             print(
@@ -216,11 +234,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             checkpoint_index=np.asarray(checkpoint_index, dtype=np.int32),
             current_checkpoint=np.asarray(str(checkpoints[checkpoint_index])),
             target_checkpoint=np.asarray(str(checkpoints[checkpoint_index + 1])),
-            normalization=np.asarray("raw"),
+            normalization=np.asarray("predicted_noise_delta_l2"),
             projection_dim=np.asarray(args.projection_dim, dtype=np.int32),
         )
         current_model = target_model
         current_payload = target_payload
+    progress.close()
     return 0
 
 

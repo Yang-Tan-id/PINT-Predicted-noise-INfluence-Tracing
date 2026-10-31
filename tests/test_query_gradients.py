@@ -39,8 +39,7 @@ class QueryGradientTests(unittest.TestCase):
             checkpoint_pair_range(10, 0, 0)
 
     def test_experiment_normalization_contract(self) -> None:
-        self.assertEqual(normalization_for("x3"), "raw")
-        for experiment in ("shape3d", "celeba", "artbench2"):
+        for experiment in ("x3", "shape3d", "celeba", "artbench2"):
             self.assertEqual(
                 normalization_for(experiment), "predicted_noise_delta_l2"
             )
@@ -51,6 +50,12 @@ class QueryGradientTests(unittest.TestCase):
             self.assertEqual(grid.shape, (100,))
             self.assertEqual((int(grid[0]), int(grid[-1])), (999, 0))
             self.assertEqual(timestep_count_for(experiment), 100)
+        self.assertTrue(
+            np.array_equal(
+                timestep_grid("x3"),
+                np.linspace(999, 0, 100, dtype=np.int32),
+            )
+        )
         for experiment in ("celeba", "artbench2"):
             grid = timestep_grid(experiment)
             self.assertEqual(grid.shape, (50,))
@@ -190,7 +195,9 @@ class QueryGradientTests(unittest.TestCase):
             )
             with np.load(output / "checkpoint_0000.npz") as payload:
                 self.assertEqual(payload["query_features"].shape, (2, 100, 16))
-                self.assertEqual(str(payload["normalization"]), "raw")
+                self.assertEqual(
+                    str(payload["normalization"]), "predicted_noise_delta_l2"
+                )
             sharded_output = root / "sharded_gradients"
             sharded_result = x3_main(
                 [

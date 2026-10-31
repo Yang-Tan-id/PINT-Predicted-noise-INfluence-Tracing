@@ -1,0 +1,49 @@
+from __future__ import annotations
+
+import unittest
+
+from pint.baselines.attribution_cli import attribution_plan
+from pint.baselines.common import baseline_spec, run_tag
+from pint.baselines.query_cli import query_plan
+
+
+class BaselineTests(unittest.TestCase):
+    def test_dataset_timestamp_and_mc_contract(self):
+        for method in ("gas", "tracincp", "retrac"):
+            self.assertEqual(
+                (baseline_spec(method, "x3").timestep_count, baseline_spec(method, "x3").mc_samples),
+                (100, 10),
+            )
+            self.assertEqual(
+                (baseline_spec(method, "shape3d").timestep_count, baseline_spec(method, "shape3d").mc_samples),
+                (100, 1),
+            )
+            for experiment in ("celeba", "artbench2"):
+                self.assertEqual(
+                    (baseline_spec(method, experiment).timestep_count, baseline_spec(method, experiment).mc_samples),
+                    (50, 1),
+                )
+
+    def test_method_normalization_contract(self):
+        self.assertEqual(baseline_spec("gas", "x3").score_normalization, "projected_both_l2")
+        self.assertEqual(baseline_spec("tracincp", "x3").score_normalization, "raw")
+        self.assertEqual(
+            baseline_spec("retrac", "x3").score_normalization,
+            "full_l2_before_projection",
+        )
+
+    def test_query_filename_tag_carries_method_sampling_and_projection(self):
+        spec = baseline_spec("retrac", "celeba")
+        self.assertEqual(run_tag(spec, 4096), "retrac_t50_mc1_projected4096")
+        self.assertEqual(run_tag(spec, 2048), "retrac_t50_mc1_projected2048")
+
+    def test_query_and_attribution_plans_share_the_tag(self):
+        query = query_plan("shape3d", "gas", projection_dim=2048)
+        attribution = attribution_plan("shape3d", "gas", projection_dim=2048)
+        self.assertEqual(query["tag"], attribution["tag"])
+        self.assertIn("/methods/gas/queries", query["output"])
+        self.assertEqual(attribution["parameter_sources"], ["raw_gradient", "adamw_full"])
+
+
+if __name__ == "__main__":
+    unittest.main()

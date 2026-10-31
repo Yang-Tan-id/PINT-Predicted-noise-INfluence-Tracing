@@ -34,9 +34,9 @@ class QuerySamplingTests(unittest.TestCase):
     def test_plan_accepts_custom_count(self) -> None:
         self.assertEqual(sampling_plan("shape3d", 17)["query_count"], 17)
 
-    def test_query_seed_defaults_are_zero(self) -> None:
-        self.assertEqual(default_query_seed("shape3d"), 0)
-        self.assertEqual(sampling_plan("shape3d")["seed"], 0)
+    def test_query_seed_defaults_match_experiment_contracts(self) -> None:
+        self.assertEqual(default_query_seed("shape3d"), 100)
+        self.assertEqual(sampling_plan("shape3d")["seed"], 100)
         self.assertEqual(default_query_seed("x3"), 0)
 
     def test_custom_seed_offsets_initial_seeds(self) -> None:
@@ -57,8 +57,8 @@ class QuerySamplingTests(unittest.TestCase):
             self.assertTrue(labels[1].startswith("object_hue_"))
             self.assertTrue(labels[2].startswith("wall_hue_"))
             self.assertTrue(labels[3].startswith("floor_hue_"))
-        self.assertEqual(records[0]["initial_seed"], 0)
-        self.assertEqual(records[-1]["initial_seed"], 99)
+        self.assertEqual(records[0]["initial_seed"], 100)
+        self.assertEqual(records[-1]["initial_seed"], 199)
 
     def test_refined_ddim_timestep_grid(self) -> None:
         self.assertEqual(inference_timesteps(1000, 50), list(range(999, -1, -20)))

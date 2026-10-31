@@ -11,7 +11,7 @@ import numpy as np
 
 
 def normalization_for(experiment: str) -> str:
-    return "raw" if experiment == "x3" else "predicted_noise_delta_l2"
+    return "predicted_noise_delta_l2"
 
 
 def timestep_count_for(experiment: str) -> int:
@@ -20,7 +20,11 @@ def timestep_count_for(experiment: str) -> int:
 
 def timestep_grid(experiment: str, total: int = 1000) -> np.ndarray:
     count = timestep_count_for(experiment)
-    if experiment in ("x3", "shape3d"):
+    if experiment == "x3":
+        # Match torch.linspace(T-1, 0, 100).long() and the later x3
+        # TracIn-DAS timestamp bank exactly.
+        return np.linspace(total - 1, 0, count, dtype=np.int32)
+    if experiment == "shape3d":
         positions = np.linspace(0, total - 1, count, dtype=np.int32)
         return (total - 1 - positions).astype(np.int32)
     if total % count:
@@ -50,6 +54,18 @@ def stable_seed(*parts: object) -> int:
 def stable_torch_seed(*parts: object) -> int:
     digest = hashlib.sha256("|".join(map(str, parts)).encode("utf-8")).digest()
     return int.from_bytes(digest[:8], "little") % (2**63 - 1)
+
+
+def x3_tracin_das_noise_seed(
+    checkpoint_index: int, timestamp_index: int, timestep: int
+) -> int:
+    return stable_torch_seed(
+        7367,
+        "tracin_das_checkpoint_timestamp_shared_noise",
+        checkpoint_index,
+        timestamp_index,
+        timestep,
+    )
 
 
 def read_query_manifest(path: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:

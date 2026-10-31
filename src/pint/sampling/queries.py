@@ -22,10 +22,10 @@ def default_query_count(experiment: str) -> int:
 
 
 def default_query_seed(experiment: str) -> int:
-    return 0
+    return 100 if experiment == "shape3d" else 0
 
 
-def shape3d_queries(count: int, seed: int = 0) -> list[dict[str, object]]:
+def shape3d_queries(count: int, seed: int = 100) -> list[dict[str, object]]:
     """Build one-per-category queries using the Shape3D LDS prompt contract."""
 
     records = []

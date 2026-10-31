@@ -7,6 +7,7 @@ from typing import Sequence
 
 import numpy as np
 
+from pint.query_gradients.common import timestep_grid
 from pint.sampling.queries import x3_queries
 
 
@@ -102,13 +103,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     schedule = x3_model.make_linear_schedule(
         int(checkpoints["prompted"].get("T", 1000)), device=device
     )
-    save_steps = np.linspace(
-        0, args.ddim_steps - 1, args.trajectory_snapshots, dtype=np.int64
-    ).tolist()
-    timestep_grid = np.linspace(
-        schedule.T - 1, 0, args.ddim_steps, dtype=np.int64
-    )
-    trajectory_t = np.asarray([int(timestep_grid[index]) for index in save_steps])
+    if args.ddim_steps != schedule.T or args.trajectory_snapshots != 100:
+        raise RuntimeError(
+            "x3 TracIn-DAS query sampling requires the default full DDIM run "
+            "with 100 saved timestamps"
+        )
+    # The later TracIn-DAS run uses int(i * (T-1) / 99), reversed into
+    # denoising order. Select the corresponding states from the full DDIM run.
+    trajectory_t = timestep_grid("x3", schedule.T).astype(np.int64)
+    save_steps = (schedule.T - 1 - trajectory_t).astype(np.int64).tolist()
     vocab = checkpoints["prompted"]["vocab"]
     width = max(2, len(str(args.num_queries - 1)))
     manifest_records = []
