@@ -40,12 +40,17 @@ class NumberedWorkflowTests(unittest.TestCase):
             (root / name / "05_train_evaluation_models.py").read_text(encoding="utf-8")
             for name in EXPERIMENT_NAMES
         }
+        report_contents = {
+            (root / name / "06_evaluate_models.py").read_text(encoding="utf-8")
+            for name in EXPERIMENT_NAMES
+        }
         self.assertEqual(len(prepare_contents), 1)
         self.assertEqual(len(train_contents), 1)
         self.assertEqual(len(sample_contents), 1)
         self.assertEqual(len(query_gradient_contents), 1)
         self.assertEqual(len(attribution_contents), 1)
         self.assertEqual(len(evaluation_contents), 1)
+        self.assertEqual(len(report_contents), 1)
 
     def test_x3_generator_writes_expected_rows(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

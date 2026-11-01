@@ -14,6 +14,12 @@ import numpy as np
 BASELINE_METHODS = ("gas", "tracincp", "retrac")
 
 
+def orient_adamw_scores(method: str, scores: np.ndarray | None) -> np.ndarray | None:
+    if method not in BASELINE_METHODS:
+        raise ValueError(f"unknown baseline method: {method}")
+    return None if scores is None else -np.asarray(scores)
+
+
 @dataclass(frozen=True)
 class BaselineSpec:
     method: str

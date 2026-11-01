@@ -16,6 +16,22 @@ LDS_GROUP_SEEDS = (0, 1, 2)
 SUBSETS_PER_SEED = 64
 LDS_MODEL_COUNT = len(LDS_GROUP_SEEDS) * SUBSETS_PER_SEED
 LDS_SUBSET_SIZES = {"x3": 12_500, "shape3d": 2_500, "celeba": 2_500}
+LDS_TARGETS = ("simple_loss", "trajectory_deviation")
+TOPK_METRICS = (
+    "endpoint_mse", "trajectory_mse", "pixel_l2",
+    "clip_distance", "dino_distance", "lpips",
+)
+
+
+def true_f_complete(path: Path, experiment: str) -> bool:
+    if not path.is_file():
+        return False
+    expected = TOPK_METRICS if experiment == "artbench2" else LDS_TARGETS
+    try:
+        with np.load(path, allow_pickle=False) as payload:
+            return all(name in payload.files for name in expected)
+    except (OSError, ValueError):
+        return False
 
 
 def artbench_ranking_sign(method: str, parameter_source: str) -> int:
@@ -24,10 +40,7 @@ def artbench_ranking_sign(method: str, parameter_source: str) -> int:
         raise ValueError(f"unknown ArtBench-2 method: {method}")
     if parameter_source not in ("raw", "adamw"):
         raise ValueError(f"unknown ArtBench-2 parameter source: {parameter_source}")
-    # The original ArtBench analysis stores endpoint-TracIn/ReTrac AdamW
-    # contractions with the opposite sign. PINT and every raw-gradient bank
-    # already use the larger-is-more-influential orientation.
-    return -1 if method != "pint" and parameter_source == "adamw" else 1
+    return 1
 
 
 def _topk_columns(scores: np.ndarray, topk: int, ranking_sign: int) -> np.ndarray:
@@ -257,6 +270,7 @@ def merge_true_f(jobs: list[EvaluationJob], output: Path) -> Path:
         subset_ids=np.asarray([job.subset_id for job in jobs], dtype=np.int32),
         subset_seeds=np.asarray([job.subset_seed for job in jobs], dtype=np.int64),
         train_indices=np.stack(train_indices),
+        simple_loss=np.stack([record["simple_loss"] for record in records]),
         trajectory_deviation=np.stack([
             record["trajectory_deviation"] for record in records
         ]),

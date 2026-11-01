@@ -6,6 +6,13 @@ from typing import Sequence
 import numpy as np
 
 from pint.evaluation.common import EvaluationJob
+from pint.training.model_versions import (
+    ARTBENCH_CLIP_MODEL_ID,
+    ARTBENCH_CLIP_MODEL_REVISION,
+    ARTBENCH_DINO_MODEL,
+    ARTBENCH_DINO_REPOSITORY,
+    ARTBENCH_DINO_REVISION,
+)
 
 
 def _batches(values: Sequence, size: int):
@@ -35,8 +42,12 @@ def add_perceptual_metrics(jobs: list[EvaluationJob], batch_size: int = 16) -> N
         with Image.open(path) as image:
             images.append(image.convert("RGB"))
 
-    processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-    clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").half().eval().to(device)
+    processor = CLIPProcessor.from_pretrained(
+        ARTBENCH_CLIP_MODEL_ID, revision=ARTBENCH_CLIP_MODEL_REVISION
+    )
+    clip_model = CLIPModel.from_pretrained(
+        ARTBENCH_CLIP_MODEL_ID, revision=ARTBENCH_CLIP_MODEL_REVISION
+    ).half().eval().to(device)
     clip_parts = []
     for batch in tqdm(
         list(_batches(images, batch_size)), desc="ArtBench CLIP", unit="batch"
@@ -51,7 +62,10 @@ def add_perceptual_metrics(jobs: list[EvaluationJob], batch_size: int = 16) -> N
     del clip_model
     torch.cuda.empty_cache()
 
-    dino_model = torch.hub.load("facebookresearch/dino:main", "dino_vits16").eval().to(device)
+    dino_model = torch.hub.load(
+        f"{ARTBENCH_DINO_REPOSITORY}:{ARTBENCH_DINO_REVISION}",
+        ARTBENCH_DINO_MODEL,
+    ).eval().to(device)
     preprocess = transforms.Compose([
         transforms.Resize(256, interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.CenterCrop(224),

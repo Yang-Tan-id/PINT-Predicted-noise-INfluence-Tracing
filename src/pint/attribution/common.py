@@ -2,12 +2,48 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 
 from pint.query_gradients.common import atomic_savez
+
+
+def open_timestamp_accumulator(
+    output_dir: Path,
+    shard_index: int,
+    source: str,
+    shape: tuple[int, int, int],
+) -> tuple[Path, np.memmap]:
+    directory = output_dir / "shards"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f".shard_{shard_index:04d}.{source}.timestamps.npy"
+    values = np.lib.format.open_memmap(
+        path, mode="w+", dtype=np.float32, shape=shape
+    )
+    values.fill(0.0)
+    return path, values
+
+
+def finish_timestamp_accumulator(path: Path, values: np.memmap) -> np.ndarray:
+    from tqdm.auto import tqdm
+
+    scores = np.zeros(values.shape[1:], dtype=np.float64)
+    for timestamp_slot in tqdm(
+        range(values.shape[0]),
+        desc=f"Reducing {path.name}",
+        unit="timestamp",
+        dynamic_ncols=True,
+        leave=False,
+    ):
+        component = np.asarray(values[timestamp_slot], dtype=np.float64)
+        scores += np.square(component)
+    values.flush()
+    values._mmap.close()
+    os.unlink(path)
+    return scores
 
 
 def datapoint_shard(count: int, shard_index: int, shard_count: int) -> range:
@@ -97,8 +133,9 @@ def merge_shards(output_dir: Path, shard_count: int) -> Path:
         "score_normalization",
         "projection", "projection_dim", "timesteps", "checkpoint_pairs",
         "query_manifest_sha256", "scope", "model_seed", "mc_samples",
-        "mc_pairing", "reduction", "learning_rate_weighted",
+        "mc_pairing", "reduction", "reduction_formula", "learning_rate_weighted",
         "parameter_sources", "adamw_enabled", "adamw_semantics",
+        "adamw_score_multiplier",
     )
     for record in records:
         if not np.array_equal(record["query_ids"], reference["query_ids"]):
@@ -178,7 +215,8 @@ def attribution_metadata(
         "model_seed": model_seed,
         "mc_samples": 1,
         "mc_pairing": "shared_with_query_by_checkpoint_and_timestep",
-        "reduction": "checkpoint_sum_of_timestep_mean_dot_products",
+        "reduction": "timestamp_sum_squared",
+        "reduction_formula": "sum_t((sum_checkpoint learning_rate * dot / num_timesteps)^2)",
         "learning_rate_weighted": True,
         "parameter_sources": ["raw_gradient", "adamw_full"] if adamw_enabled else ["raw_gradient"],
         "adamw_enabled": adamw_enabled,

@@ -11,7 +11,9 @@ import numpy as np
 from pint.attribution.common import (
     attribution_metadata,
     datapoint_shard,
+    finish_timestamp_accumulator,
     load_query_parts,
+    open_timestamp_accumulator,
     save_shard,
 )
 from pint.attribution_scope import load_scope, resolve_indices
@@ -147,12 +149,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         not args.no_adamw,
     )
     query_ids = np.asarray(query_parts[0]["query_ids"], dtype=np.int32)
-    raw_scores = np.zeros((len(query_ids), len(train_indices)), dtype=np.float64)
-    adamw_scores = (
-        None if args.no_adamw
-        else np.zeros((len(query_ids), len(train_indices)), dtype=np.float64)
-    )
     timestep_count = len(query_manifest["timesteps"])
+    accumulator_shape = (timestep_count, len(query_ids), len(train_indices))
+    raw_path, raw_timestamps = open_timestamp_accumulator(
+        args.output_dir, args.shard_index, "raw", accumulator_shape
+    )
+    adamw_path, adamw_timestamps = (
+        (None, None) if args.no_adamw else
+        open_timestamp_accumulator(
+            args.output_dir, args.shard_index, "adamw", accumulator_shape
+        )
+    )
     if timestep_count % args.timestamp_chunk_size:
         parser.error(
             "--timestamp-chunk-size must divide the fixed timestep count to "
@@ -229,11 +236,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                     for image in clean
                 ]
             )
-            raw_contribution = np.zeros((len(query_ids), real_count), dtype=np.float32)
-            adamw_contribution = (
-                None if args.no_adamw
-                else np.zeros((len(query_ids), real_count), dtype=np.float32)
-            )
             for chunk_start in range(0, len(timesteps), args.timestamp_chunk_size):
                 chunk_end = chunk_start + args.timestamp_chunk_size
                 projected = train_function(
@@ -252,31 +254,38 @@ def main(argv: Sequence[str] | None = None) -> int:
                 else:
                     raw_projected, adamw_projected = projected
                 raw_projected_np = np.asarray(jax.device_get(raw_projected))[:real_count]
-                raw_contribution += np.einsum(
-                    "qtd,btd->qb",
+                raw_values = np.einsum(
+                    "qtd,btd->tqb",
                     query_features[:, chunk_start:chunk_end],
                     raw_projected_np,
                     optimize=True,
                 )
+                raw_timestamps[
+                    chunk_start:chunk_end,
+                    :,
+                    destination_start : destination_start + real_count,
+                ] += raw_values * learning_rate / len(timesteps)
                 if adamw_projected is not None:
-                    assert adamw_contribution is not None
+                    assert adamw_timestamps is not None
                     adamw_projected_np = np.asarray(jax.device_get(adamw_projected))[:real_count]
-                    adamw_contribution += np.einsum(
-                        "qtd,btd->qb",
+                    adamw_values = np.einsum(
+                        "qtd,btd->tqb",
                         query_features[:, chunk_start:chunk_end],
                         adamw_projected_np,
                         optimize=True,
                     )
+                    adamw_timestamps[
+                        chunk_start:chunk_end,
+                        :,
+                        destination_start : destination_start + real_count,
+                    ] += adamw_values * learning_rate / len(timesteps)
                 progress.update(1)
-            raw_scores[:, destination_start : destination_start + real_count] += (
-                raw_contribution.astype(np.float64) * learning_rate / len(timesteps)
-            )
-            if adamw_scores is not None:
-                assert adamw_contribution is not None
-                adamw_scores[:, destination_start : destination_start + real_count] += (
-                    adamw_contribution.astype(np.float64) * learning_rate / len(timesteps)
-                )
     progress.close()
+    raw_scores = finish_timestamp_accumulator(raw_path, raw_timestamps)
+    adamw_scores = (
+        None if adamw_timestamps is None else
+        finish_timestamp_accumulator(adamw_path, adamw_timestamps)
+    )
     metadata = attribution_metadata(
         experiment=args.experiment,
         query_manifest=args.query_manifest,

@@ -4,6 +4,7 @@ import tempfile
 import unittest
 import os
 import pickle
+import csv
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,11 +19,40 @@ from pint.evaluation.common import (
     merge_true_f,
     prepare_lds_jobs,
     prepare_artbench_jobs,
+    true_f_complete,
 )
-from pint.evaluation.metrics_artbench2 import _trajectory_metrics
+from pint.evaluation.metrics_artbench2 import (
+    _expected_timesteps,
+    _is_all_black,
+    _trajectory_metrics,
+)
+from pint.evaluation.metrics_jax import (
+    simple_loss_probe_seed,
+    simple_loss_timesteps,
+)
+from pint.evaluation.reporting import finite_spearman, write_reports
+from pint.training.model_versions import (
+    ARTBENCH_CLIP_MODEL_REVISION,
+    ARTBENCH_DINO_REVISION,
+)
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_jax_simple_loss_matches_latest_paper_probe_contracts(self) -> None:
+        shape_timesteps = simple_loss_timesteps("shape3d", 1000)
+        celeba_timesteps = simple_loss_timesteps("celeba", 1000)
+        self.assertTrue(np.array_equal(
+            shape_timesteps, np.linspace(999, 0, 100, dtype=np.int32)
+        ))
+        self.assertTrue(np.array_equal(
+            celeba_timesteps, np.linspace(999, 0, 50, dtype=np.int32)
+        ))
+        self.assertEqual(len(np.unique(shape_timesteps)), 100)
+        self.assertEqual(len(np.unique(celeba_timesteps)), 50)
+        self.assertIsNone(simple_loss_probe_seed("shape3d", 7))
+        self.assertEqual(simple_loss_probe_seed("celeba", 0), 2026)
+        self.assertEqual(simple_loss_probe_seed("celeba", 7), 702_047)
+
     def test_paper_lds_contract(self) -> None:
         self.assertEqual(LDS_MODEL_COUNT, 192)
         self.assertEqual(LDS_SUBSET_SIZES["x3"], 12_500)
@@ -90,7 +120,7 @@ class EvaluationTests(unittest.TestCase):
         self.assertEqual(artbench_ranking_sign("pint", "adamw"), 1)
         for method in ("gas", "tracincp", "retrac"):
             self.assertEqual(artbench_ranking_sign(method, "raw"), 1)
-            self.assertEqual(artbench_ranking_sign(method, "adamw"), -1)
+            self.assertEqual(artbench_ranking_sign(method, "adamw"), 1)
         values = np.asarray([3.0, np.nan, -4.0, 2.0])
         self.assertTrue(np.array_equal(_topk_columns(values, 2, +1), [0, 3]))
         self.assertTrue(np.array_equal(_topk_columns(values, 2, -1), [2, 3]))
@@ -101,6 +131,22 @@ class EvaluationTests(unittest.TestCase):
         endpoint, trajectory = _trajectory_metrics(reference, candidate)
         self.assertEqual(endpoint, 1.0)
         self.assertEqual(trajectory, 1.0)
+
+    def test_artbench_evaluation_rejects_schedule_drift_and_black_images(self) -> None:
+        from PIL import Image
+
+        self.assertEqual(
+            _expected_timesteps(1000, 50), list(range(999, -1, -20))
+        )
+        with self.assertRaises(ValueError):
+            _expected_timesteps(1000, 60)
+        self.assertTrue(_is_all_black(Image.new("RGB", (2, 2), (0, 0, 0))))
+        self.assertFalse(_is_all_black(Image.new("RGB", (2, 2), (0, 0, 1))))
+
+    def test_artbench_perceptual_models_use_immutable_revisions(self) -> None:
+        for revision in (ARTBENCH_CLIP_MODEL_REVISION, ARTBENCH_DINO_REVISION):
+            self.assertEqual(len(revision), 40)
+            self.assertTrue(all(character in "0123456789abcdef" for character in revision))
 
     def test_artbench_merge_contains_only_requested_removal_metrics(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -142,6 +188,7 @@ class EvaluationTests(unittest.TestCase):
                 np.savez_compressed(
                     model / "true_f.npz",
                     query_ids=np.asarray([4, 9]),
+                    simple_loss=np.asarray([subset_id + 0.1, subset_id + 0.2]),
                     trajectory_deviation=np.asarray([subset_id + 1.1, subset_id + 1.2]),
                 )
                 jobs.append(EvaluationJob(
@@ -150,7 +197,7 @@ class EvaluationTests(unittest.TestCase):
                 ))
             merged = merge_true_f(jobs, root / "true_f.npz")
             with np.load(merged) as payload:
-                self.assertNotIn("simple_loss", payload.files)
+                self.assertEqual(payload["simple_loss"].shape, (2, 2))
                 self.assertEqual(payload["trajectory_deviation"].shape, (2, 2))
                 self.assertTrue(np.array_equal(payload["query_ids"], [4, 9]))
                 self.assertTrue(np.array_equal(payload["subset_ids"], [0, 1]))
@@ -165,6 +212,7 @@ class EvaluationTests(unittest.TestCase):
             np.save(indices, np.asarray([0, 1]))
             np.savez_compressed(
                 model / "true_f.npz", query_ids=np.asarray([0]),
+                simple_loss=np.asarray([0.1]),
                 trajectory_deviation=np.asarray([0.2]),
             )
             job = EvaluationJob(
@@ -176,6 +224,76 @@ class EvaluationTests(unittest.TestCase):
                 self.assertEqual(
                     str(payload["trajectory_reduction"]), "mean_snapshot_l2_squared"
                 )
+
+    def test_true_f_completion_requires_every_requested_metric(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "true_f.npz"
+            np.savez_compressed(path, trajectory_deviation=np.asarray([1.0]))
+            self.assertFalse(true_f_complete(path, "x3"))
+            np.savez_compressed(
+                path, simple_loss=np.asarray([1.0]),
+                trajectory_deviation=np.asarray([2.0]),
+            )
+            self.assertTrue(true_f_complete(path, "x3"))
+
+    def test_finite_spearman_uses_average_tie_ranks(self) -> None:
+        self.assertAlmostEqual(
+            finite_spearman(np.asarray([1, 1, 3]), np.asarray([1, 2, 3])),
+            0.8660254037844387,
+        )
+
+    def test_lds_report_writes_query_csv_and_method_mean_std(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            base = Path(directory)
+            output_root = base / "outputs"
+            evaluation = output_root / "x3" / "evaluation"
+            true_f = evaluation / "lds" / "true_f.npz"
+            true_f.parent.mkdir(parents=True)
+            np.savez_compressed(
+                true_f,
+                query_ids=np.asarray([4, 9]),
+                train_indices=np.asarray([[0, 1], [1, 2], [2, 3]]),
+                simple_loss=np.asarray([[0, 2], [1, 1], [2, 0]], dtype=float),
+                trajectory_deviation=np.asarray([[0, 2], [1, 1], [2, 0]], dtype=float),
+            )
+            scores = output_root / "x3" / "attribution" / "timesteps_100" / "scores.npz"
+            scores.parent.mkdir(parents=True)
+            values = np.asarray([[0, 1, 2, 3], [3, 2, 1, 0]], dtype=float)
+            np.savez_compressed(
+                scores, query_ids=np.asarray([4, 9]), train_indices=np.arange(4),
+                raw_scores=values, adamw_scores=values,
+            )
+            with patch.dict(os.environ, {"PINT_OUTPUT_ROOT": str(output_root)}, clear=False):
+                report, query_csv = write_reports("x3", evaluation)
+            with query_csv.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 8)
+            self.assertEqual({row["prediction_sign"] for row in rows}, {"-1.0"})
+            self.assertIn("pint | raw | simple_loss | 2 |", report.read_text())
+
+    def test_topk_report_includes_all_six_metrics(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "evaluation"
+            merged = root / "topk_removal" / "pint" / "true_f.npz"
+            merged.parent.mkdir(parents=True)
+            values = np.asarray([1.0, 3.0])
+            np.savez_compressed(
+                merged,
+                query_ids=np.asarray([0, 1]), methods=np.asarray(["pint", "pint"]),
+                parameter_sources=np.asarray(["raw", "raw"]),
+                endpoint_mse=values, trajectory_mse=values, pixel_l2=values,
+                clip_distance=values, dino_distance=values, lpips=values,
+            )
+            report, query_csv = write_reports("artbench2", root)
+            with query_csv.open(newline="", encoding="utf-8") as handle:
+                rows = list(csv.DictReader(handle))
+            self.assertEqual(len(rows), 12)
+            text = report.read_text()
+            for metric in (
+                "endpoint_mse", "trajectory_mse", "pixel_l2",
+                "clip_distance", "dino_distance", "lpips",
+            ):
+                self.assertIn(f"pint | raw | {metric} | 2 | 2.00000000 | 1.00000000", text)
 
 
 if __name__ == "__main__":

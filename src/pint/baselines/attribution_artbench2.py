@@ -15,7 +15,10 @@ from pint.attribution.artbench2 import LinearGradSampleCapture, _checkpoint_opti
 from pint.attribution.common import datapoint_shard, save_shard
 from pint.attribution.torch_adamw import adamw_full_direction_batch
 from pint.baselines.artbench_projection import ArtBenchProjector, artbench_seed
-from pint.baselines.common import baseline_spec, load_query_run, run_tag, validate_query_source
+from pint.baselines.common import (
+    baseline_spec, load_query_run, orient_adamw_scores, run_tag,
+    validate_query_source,
+)
 from pint.query_gradients.artbench2 import _build_unet, _checkpoints, _load_lora_checkpoint
 from pint.training.model_versions import ARTBENCH_MODEL_ID, ARTBENCH_MODEL_REVISION
 
@@ -352,11 +355,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         "parameter_sources": ["raw_gradient"] if args.no_adamw else ["raw_gradient", "adamw_full"],
         "adamw_enabled": not args.no_adamw,
         "adamw_semantics": None if args.no_adamw else "saved-state next AdamW direction; LR applied once",
+        "adamw_score_multiplier": None if args.no_adamw else -1,
         "shard_index": args.shard_index,
         "shard_count": args.shard_count,
         "batch_size": args.batch_size,
     }
-    save_shard(args.output_dir, args.shard_index, raw_scores=raw_scores, adamw_scores=adamw_scores, train_indices=train_indices, query_ids=query_ids, metadata=metadata)
+    save_shard(
+        args.output_dir, args.shard_index, raw_scores=raw_scores,
+        adamw_scores=orient_adamw_scores(args.method, adamw_scores),
+        train_indices=train_indices, query_ids=query_ids, metadata=metadata,
+    )
     return 0
 
 

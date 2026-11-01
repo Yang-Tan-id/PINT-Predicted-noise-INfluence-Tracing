@@ -73,7 +73,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     if raw_argv and raw_argv[0] in ("train-lds", "evaluate"):
         from pint.evaluation.cli import main as evaluation_main
 
-        return evaluation_main(raw_argv[1:])
+        stage = "train" if raw_argv[0] == "train-lds" else "evaluate"
+        return evaluation_main(["--stage", stage, *raw_argv[1:]])
     args = build_parser().parse_args(raw_argv)
     root = repo_root()
     if args.command == "validate":

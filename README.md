@@ -135,7 +135,7 @@ python 05_train_evaluation_models.py --gpu-ids 0,1,2,3
 For x3, Shape3D, and CelebA:
 
 - Trains the 192 paper LDS subsets.
-- Saves trajectory-deviation targets.
+- Computes each trained model's simple-loss and trajectory-deviation true-f.
 
 For ArtBench-2:
 
@@ -147,6 +147,17 @@ For ArtBench-2:
   `--method tracincp`, or `--method retrac`.
 - Evaluates raw and AdamW scores by default; select one with
   `--parameter-source raw` or `--parameter-source adamw`.
+
+### 12. Evaluate models
+
+```bash
+python 06_evaluate_models.py --gpu-ids 0,1,2,3
+```
+
+This verifies every true-f result and computes only missing or incomplete ones;
+it never trains a missing model. Per-query results are written to
+`outputs/<dataset>/evaluation/reports/query_metrics.csv`, with mean/std summaries
+for every available method in `report.txt` in the same folder.
 
 ## Validation
 

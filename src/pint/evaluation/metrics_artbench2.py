@@ -14,6 +14,19 @@ def _trajectory_metrics(reference: np.ndarray, candidate: np.ndarray) -> tuple[f
     return float(np.mean((left[-1] - right[-1]) ** 2)), float(np.mean((left - right) ** 2))
 
 
+def _expected_timesteps(training_timesteps: int, steps: int) -> list[int]:
+    if steps < 1 or training_timesteps % steps:
+        raise ValueError(
+            f"training timesteps {training_timesteps} must be divisible by steps {steps}"
+        )
+    stride = training_timesteps // steps
+    return [training_timesteps - 1 - stride * index for index in range(steps)]
+
+
+def _is_all_black(image) -> bool:
+    return all(low == 0 and high == 0 for low, high in image.convert("RGB").getextrema())
+
+
 def evaluate(
     model_dir: Path,
     reference_dir: Path,
@@ -47,8 +60,7 @@ def evaluate(
         requires_safety_checker=False,
     )
     training_timesteps = int(pipeline.scheduler.config.num_train_timesteps)
-    if training_timesteps % steps:
-        raise ValueError("ArtBench-2 query steps must divide training timesteps")
+    expected_timesteps = _expected_timesteps(training_timesteps, steps)
     pipeline.scheduler = DDIMScheduler.from_config(
         pipeline.scheduler.config,
         steps_offset=training_timesteps // steps - 1,
@@ -75,9 +87,17 @@ def evaluate(
             callback=capture,
             callback_steps=1,
         )
+        actual_timesteps = [int(value) for value in pipeline.scheduler.timesteps.tolist()]
+        if actual_timesteps != expected_timesteps:
+            raise RuntimeError(
+                "ArtBench-2 DDIM schedule mismatch: "
+                f"actual={actual_timesteps}, expected={expected_timesteps}"
+            )
         if len(states) != steps:
             raise RuntimeError(f"expected {steps} trajectory states, found {len(states)}")
         image = result.images[0].convert("RGB")
+        if _is_all_black(image):
+            raise RuntimeError("ArtBench-2 generation produced an all-black image")
         array = np.asarray(image, dtype=np.float32) / 255.0
         return image, np.stack(states), array
 

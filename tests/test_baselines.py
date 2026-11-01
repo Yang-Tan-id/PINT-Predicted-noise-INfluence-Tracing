@@ -2,12 +2,21 @@ from __future__ import annotations
 
 import unittest
 
+import numpy as np
+
 from pint.baselines.attribution_cli import attribution_plan
-from pint.baselines.common import baseline_spec, run_tag
+from pint.baselines.common import baseline_spec, orient_adamw_scores, run_tag
 from pint.baselines.query_cli import query_plan
 
 
 class BaselineTests(unittest.TestCase):
+    def test_baseline_adamw_scores_are_negated_at_write_orientation(self):
+        values = np.asarray([[1.0, -2.0]])
+        for method in ("gas", "tracincp", "retrac"):
+            self.assertTrue(np.array_equal(
+                orient_adamw_scores(method, values), np.asarray([[-1.0, 2.0]])
+            ))
+
     def test_dataset_timestamp_and_mc_contract(self):
         for method in ("gas", "tracincp", "retrac"):
             self.assertEqual(

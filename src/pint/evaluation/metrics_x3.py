@@ -5,6 +5,8 @@ from pathlib import Path
 
 import numpy as np
 
+from pint.query_gradients.common import timestep_grid
+
 
 def _final_checkpoint(root: Path) -> Path:
     paths = sorted((root / "base" / "prompted").glob("epoch_*.pt"))
@@ -15,6 +17,7 @@ def _final_checkpoint(root: Path) -> Path:
 
 def evaluate(model_dir: Path, reference_dir: Path, query_manifest: Path, output: Path) -> None:
     import torch
+    import torch.nn.functional as functional
     from tqdm.auto import tqdm
 
     from pint.training.backends import x3_model
@@ -33,7 +36,13 @@ def evaluate(model_dir: Path, reference_dir: Path, query_manifest: Path, output:
 
     target, reference = build(target_payload), build(reference_payload)
     records = json.loads(query_manifest.read_text(encoding="utf-8"))
-    deviation, query_ids = [], []
+    schedule = x3_model.make_linear_schedule(
+        int(target_payload.get("T", 1000)), device=device
+    )
+    simple_timesteps = tuple(
+        int(value) for value in timestep_grid("x3", schedule.T).tolist()
+    )
+    simple_loss, deviation, query_ids = [], [], []
     with torch.no_grad():
         for record in tqdm(records, desc="Evaluating LDS true f", unit="query", leave=False):
             query_id = int(record["query_id"])
@@ -48,12 +57,33 @@ def evaluate(model_dir: Path, reference_dir: Path, query_manifest: Path, output:
                 trajectory[:, 0], timesteps, conditions
             )
             deviation.append(float(delta.square().flatten(1).sum(1).mean().item()))
+            endpoint = torch.from_numpy(np.load(query_dir / "final_state.npy")).to(
+                device=device, dtype=torch.float32
+            )
+            losses = []
+            for timestep in simple_timesteps:
+                t = torch.tensor([timestep], device=device, dtype=torch.long)
+                for mc_index in range(4):
+                    generator = torch.Generator(device=str(device))
+                    generator.manual_seed(
+                        90_000_000 + query_id * 10_000 + timestep * 10 + mc_index
+                    )
+                    noise = torch.randn(
+                        endpoint.shape, generator=generator, device=device,
+                        dtype=endpoint.dtype,
+                    )
+                    noisy = x3_model.q_sample(endpoint, t, noise, schedule)
+                    losses.append(functional.mse_loss(target(noisy, t, condition), noise))
+            simple_loss.append(float(torch.stack(losses).mean().item()))
             query_ids.append(query_id)
     output.parent.mkdir(parents=True, exist_ok=True)
     np.savez_compressed(
         output,
         query_ids=np.asarray(query_ids, dtype=np.int32),
+        simple_loss=np.asarray(simple_loss, dtype=np.float64),
         trajectory_deviation=np.asarray(deviation, dtype=np.float64),
         parameter_source=np.asarray("ema"),
+        simple_loss_timesteps=np.asarray(simple_timesteps, dtype=np.int32),
+        simple_loss_mc=np.asarray(4, dtype=np.int32),
         trajectory_reduction=np.asarray("mean_snapshot_l2_squared"),
     )

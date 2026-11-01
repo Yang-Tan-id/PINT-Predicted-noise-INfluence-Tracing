@@ -41,6 +41,7 @@ def attribution_plan(
         "progress_bar": True,
         "parameter_sources": ["raw_gradient", "adamw_full"] if adamw_enabled else ["raw_gradient"],
         "score_normalization": "raw" if experiment == "x3" else "query_train_l2",
+        "reduction": "timestamp_sum_squared",
     }
 
 

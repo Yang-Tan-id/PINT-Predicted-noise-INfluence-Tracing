@@ -9,10 +9,27 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from pint.attribution.cli import attribution_plan, main
-from pint.attribution.common import datapoint_shard, merge_shards, save_shard
+from pint.attribution.common import (
+    datapoint_shard,
+    finish_timestamp_accumulator,
+    merge_shards,
+    open_timestamp_accumulator,
+    save_shard,
+)
 
 
 class AttributionTests(unittest.TestCase):
+    def test_timestamp_sum_squared_reduction_preserves_square_order(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path, values = open_timestamp_accumulator(
+                Path(directory), 0, "raw", (2, 1, 1)
+            )
+            values[:, 0, 0] += np.asarray([1.0, 2.0])
+            values[:, 0, 0] += np.asarray([3.0, 4.0])
+            reduced = finish_timestamp_accumulator(path, values)
+            self.assertEqual(float(reduced[0, 0]), 52.0)
+            self.assertFalse(path.exists())
+
     @patch("pint.baselines.attribution_cli.main")
     def test_numbered_attribution_entrypoint_dispatches_baseline_method(
         self, baseline_main: Mock
@@ -36,6 +53,7 @@ class AttributionTests(unittest.TestCase):
         self.assertEqual(attribution_plan("artbench2")["mc_samples"], 1)
         self.assertEqual(attribution_plan("shape3d")["scope"], "paper_5k")
         self.assertEqual(attribution_plan("x3")["scope"], "all")
+        self.assertEqual(attribution_plan("x3")["reduction"], "timestamp_sum_squared")
         self.assertEqual(attribution_plan("x3")["score_normalization"], "raw")
         self.assertEqual(
             attribution_plan("artbench2")["score_normalization"],

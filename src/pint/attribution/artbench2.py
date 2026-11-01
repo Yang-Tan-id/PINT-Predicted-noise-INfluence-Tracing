@@ -12,7 +12,9 @@ import numpy as np
 from pint.attribution.common import (
     attribution_metadata,
     datapoint_shard,
+    finish_timestamp_accumulator,
     load_query_parts,
+    open_timestamp_accumulator,
     save_shard,
 )
 from pint.attribution.torch_adamw import adamw_full_direction_batch
@@ -272,10 +274,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     unet, layers = _build_unet(args.model, args.model_revision, rank, device)
     capture = None
     query_ids = np.asarray(query_parts[0]["query_ids"], dtype=np.int32)
-    raw_scores = np.zeros((len(query_ids), len(train_indices)), dtype=np.float64)
-    adamw_scores = (
-        None if args.no_adamw
-        else np.zeros((len(query_ids), len(train_indices)), dtype=np.float64)
+    timestep_count = len(query_manifest["timesteps"])
+    accumulator_shape = (timestep_count, len(query_ids), len(train_indices))
+    raw_path, raw_timestamps = open_timestamp_accumulator(
+        args.output_dir, args.shard_index, "raw", accumulator_shape
+    )
+    adamw_path, adamw_timestamps = (
+        (None, None) if args.no_adamw else
+        open_timestamp_accumulator(
+            args.output_dir, args.shard_index, "adamw", accumulator_shape
+        )
     )
     total_units = len(query_parts) * math.ceil(len(train_indices) / args.batch_size) * len(query_manifest["timesteps"])
     progress = tqdm(
@@ -331,10 +339,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             clean = torch.stack(latent_bank[destination_start:destination_end]).to(device)
             batch_labels = labels[destination_start:destination_end]
             hidden = torch.cat([hidden_by_label[label] for label in batch_labels]).to(device)
-            raw_contribution = torch.zeros(
-                (len(query_ids), len(clean)), device=device, dtype=torch.float32
-            )
-            adamw_contribution = torch.zeros_like(raw_contribution) if optimizer is not None else None
             for timestep_slot, (timestep, shared_noise) in enumerate(zip(timesteps, noise_bank)):
                 noise = shared_noise.expand_as(clean)
                 t = torch.full((len(clean),), int(timestep), device=device, dtype=torch.long)
@@ -353,7 +357,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                 gradients = capture.gradients(losses)
                 projected = projector.project_batch(gradients)
                 projected = functional.normalize(projected, dim=-1, eps=1e-12)
-                raw_contribution.add_(query_features[:, timestep_slot] @ projected.T)
+                raw_values = query_features[:, timestep_slot] @ projected.T
+                raw_timestamps[
+                    timestep_slot, :, destination_start:destination_end
+                ] += (
+                    raw_values.detach().cpu().numpy()
+                    * learning_rate / len(timesteps)
+                )
                 if optimizer is not None:
                     directions, reconstructed_lr = adamw_full_direction_batch(
                         active,
@@ -363,26 +373,25 @@ def main(argv: Sequence[str] | None = None) -> int:
                     )
                     if not np.isclose(learning_rate, reconstructed_lr):
                         raise RuntimeError("optimizer LR differs from checkpoint LR")
-                    assert adamw_contribution is not None
+                    assert adamw_timestamps is not None
                     adamw_projected = projector.project_batch(directions)
                     adamw_projected = functional.normalize(
                         adamw_projected, dim=-1, eps=1e-12
                     )
-                    adamw_contribution.add_(query_features[:, timestep_slot] @ adamw_projected.T)
+                    adamw_values = query_features[:, timestep_slot] @ adamw_projected.T
+                    adamw_timestamps[
+                        timestep_slot, :, destination_start:destination_end
+                    ] += (
+                        adamw_values.detach().cpu().numpy()
+                        * learning_rate / len(timesteps)
+                    )
                 progress.update(1)
-            raw_scores[:, destination_start:destination_end] += (
-                raw_contribution.detach().double().cpu().numpy()
-                * learning_rate
-                / len(timesteps)
-            )
-            if adamw_scores is not None:
-                assert adamw_contribution is not None
-                adamw_scores[:, destination_start:destination_end] += (
-                    adamw_contribution.detach().double().cpu().numpy()
-                    * learning_rate
-                    / len(timesteps)
-                )
     progress.close()
+    raw_scores = finish_timestamp_accumulator(raw_path, raw_timestamps)
+    adamw_scores = (
+        None if adamw_timestamps is None else
+        finish_timestamp_accumulator(adamw_path, adamw_timestamps)
+    )
     metadata = attribution_metadata(
         experiment="artbench2",
         query_manifest=args.query_manifest,

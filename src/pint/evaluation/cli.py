@@ -14,7 +14,7 @@ from pint.baselines.common import BASELINE_METHODS
 from pint.config import EXPERIMENT_NAMES
 from pint.evaluation.common import (
     LDS_MODEL_COUNT, LDS_SUBSET_SIZES, merge_true_f, prepare_artbench_jobs,
-    prepare_lds_jobs,
+    prepare_lds_jobs, true_f_complete,
 )
 from pint.training.cli import output_root
 
@@ -47,8 +47,9 @@ def _chunks(items, count):
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Train evaluation models and compute true-f targets")
+    parser = argparse.ArgumentParser(description="Train or evaluate evaluation models")
     parser.add_argument("--experiment", required=True, choices=EXPERIMENT_NAMES)
+    parser.add_argument("--stage", choices=("train", "evaluate"), required=True)
     parser.add_argument("--method", choices=("pint", *BASELINE_METHODS), default="pint")
     parser.add_argument("--projection-dim", type=int, default=4096)
     parser.add_argument("--topk", type=int, default=1000)
@@ -89,12 +90,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             "subset_group_seeds": [0, 1, 2], "subsets_per_seed": 64,
         }
     plan.update(
+        stage=args.stage,
         experiment=args.experiment, gpu_ids=[gpu for gpu in gpus if gpu is not None],
         output=str(root), progress_bar=True, eta=True,
         metrics=(
             ["endpoint_mse", "trajectory_mse", "pixel_l2", "clip_distance", "dino_distance", "lpips"]
             if args.experiment == "artbench2"
-            else ["trajectory_deviation"]
+            else ["simple_loss", "trajectory_deviation"]
         ),
         parameter_source="ema" if args.experiment != "artbench2" else "lora",
     )
@@ -114,11 +116,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             (assets / name).is_file()
             for name in ("reference.png", "candidate.png", "trajectories.npz")
         )
-        if metrics.is_file() and not args.force and (
+        if true_f_complete(metrics, args.experiment) and not args.force and (
             args.experiment != "artbench2" or artbench_complete
         ):
             continue
-        payload = {**job.as_json(), "backend_args": backend_args, "force": args.force}
+        payload = {
+            **job.as_json(), "backend_args": backend_args,
+            "force": args.force, "stage": args.stage,
+        }
         path = specs / f"{job.job_id}.json"
         path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
         pending.append((job, path))
@@ -127,7 +132,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     progress = tqdm(
         total=len(jobs), initial=len(jobs) - len(pending),
-        desc=f"{args.experiment} evaluation models", unit="model", dynamic_ncols=True,
+        desc=f"{args.experiment} evaluation {args.stage}", unit="model",
+        dynamic_ncols=True,
     )
     lock = threading.Lock()
     stopped = threading.Event()
@@ -166,6 +172,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         from pint.evaluation.artbench_perceptual import add_perceptual_metrics
 
         add_perceptual_metrics(jobs, batch_size=args.metric_batch_size)
+    if args.stage == "train":
+        print(
+            f"evaluation models and per-model true-f complete: {root}",
+            flush=True,
+        )
+        return 0
     merged_root = root / ("topk_removal" if args.experiment == "artbench2" else "lds")
     merged = merge_true_f(
         jobs,
@@ -173,7 +185,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.experiment == "artbench2"
         else merged_root / "true_f.npz",
     )
+    from pint.evaluation.reporting import write_reports
+
+    report, query_csv = write_reports(
+        args.experiment, root, projection_dim=args.projection_dim
+    )
     print(f"evaluation complete: {merged}", flush=True)
+    print(f"evaluation report: {report}", flush=True)
+    print(f"query metrics: {query_csv}", flush=True)
     return 0
 
 

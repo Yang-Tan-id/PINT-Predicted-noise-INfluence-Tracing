@@ -11,7 +11,10 @@ import numpy as np
 
 from pint.attribution.common import datapoint_shard, save_shard
 from pint.attribution.torch_adamw import adamw_full_direction_batch
-from pint.baselines.common import baseline_spec, load_query_run, run_tag, validate_query_source
+from pint.baselines.common import (
+    baseline_spec, load_query_run, orient_adamw_scores, run_tag,
+    validate_query_source,
+)
 from pint.query_gradients.common import stable_torch_seed
 from pint.query_gradients.torch_projector import CountSketchProjector
 from pint.query_gradients.x3 import _build_model, _checkpoints
@@ -42,6 +45,7 @@ def _metadata(args, manifest, model_seed, scope_size, tag):
         "parameter_sources": ["raw_gradient"] if args.no_adamw else ["raw_gradient", "adamw_full"],
         "adamw_enabled": not args.no_adamw,
         "adamw_semantics": None if args.no_adamw else "saved-state next AdamW direction; LR applied once",
+        "adamw_score_multiplier": None if args.no_adamw else -1,
         "shard_index": args.shard_index,
         "shard_count": args.shard_count,
         "batch_size": args.batch_size,
@@ -288,7 +292,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.output_dir,
         args.shard_index,
         raw_scores=raw_scores,
-        adamw_scores=adamw_scores,
+        adamw_scores=orient_adamw_scores(args.method, adamw_scores),
         train_indices=train_indices,
         query_ids=query_ids,
         metadata=_metadata(args, manifest, model_seed, len(all_indices), tag),

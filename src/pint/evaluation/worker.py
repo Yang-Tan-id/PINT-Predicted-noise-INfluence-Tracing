@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Sequence
 
 from pint.datasets.paths import data_root
+from pint.evaluation.common import true_f_complete
 from pint.training.cli import output_root
 
 
@@ -15,10 +16,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     spec = json.loads(args.job_spec.read_text(encoding="utf-8"))
     experiment = str(spec["experiment"])
+    stage = str(spec.get("stage", "train"))
+    if stage not in ("train", "evaluate"):
+        raise ValueError(f"unknown evaluation stage: {stage}")
     model_dir = Path(spec["output_dir"])
     train_indices = Path(spec["train_indices"])
     metrics_path = model_dir / "true_f.npz"
-    if metrics_path.is_file() and not bool(spec.get("force", False)):
+    if true_f_complete(metrics_path, experiment) and not bool(spec.get("force", False)):
         assets = model_dir / "evaluation_assets"
         if experiment != "artbench2" or (
             (assets / "reference.png").is_file()
@@ -34,6 +38,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         trained = bool(list((model_dir / "base" / "prompted").glob("epoch_*.pt")))
         if not trained:
+            if stage == "evaluate":
+                raise FileNotFoundError(
+                    f"evaluation model is missing under {model_dir}; run step 05 first"
+                )
             train([
                 "--output-dir", str(model_dir), "--family", "prompted",
                 "--num-checkpoints", "1", "--train-indices", str(train_indices),
@@ -52,6 +60,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         trained = bool(list(model_dir.glob("seed_*_epoch_*.ckpt")))
         if not trained:
+            if stage == "evaluate":
+                raise FileNotFoundError(
+                    f"evaluation model is missing under {model_dir}; run step 05 first"
+                )
             train([
                 "--experiment", experiment, "--output-dir", str(model_dir),
                 "--num-checkpoints", "1", "--num-devices", "1",
@@ -71,6 +83,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         from pint.training.backends.artbench_lora import main as train
 
         if not (model_dir / "final").is_dir():
+            if stage == "evaluate":
+                raise FileNotFoundError(
+                    f"evaluation model is missing under {model_dir}; run step 05 first"
+                )
             train([
                 "--output-dir", str(model_dir), "--index-path", str(train_indices),
                 "--num-checkpoints", "1", *backend_args,
