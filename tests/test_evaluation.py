@@ -5,7 +5,10 @@ import unittest
 import os
 import pickle
 import csv
+import io
+import json
 from pathlib import Path
+from contextlib import redirect_stdout
 from unittest.mock import patch
 
 import numpy as np
@@ -21,6 +24,7 @@ from pint.evaluation.common import (
     prepare_artbench_jobs,
     true_f_complete,
 )
+from pint.evaluation.cli import main as evaluation_main
 from pint.evaluation.metrics_artbench2 import (
     _expected_timesteps,
     _is_all_black,
@@ -38,6 +42,23 @@ from pint.training.model_versions import (
 
 
 class EvaluationTests(unittest.TestCase):
+    def test_artbench_cli_defaults_to_single_adamw_source(self) -> None:
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "pint.evaluation.cli.output_root", return_value=Path(directory)
+        ), patch("pint.evaluation.cli.prepare_artbench_jobs", return_value=[]) as prepare:
+            with redirect_stdout(output):
+                self.assertEqual(
+                    evaluation_main([
+                        "--experiment", "artbench2", "--stage", "train", "--dry-run"
+                    ]),
+                    0,
+                )
+        self.assertEqual(prepare.call_args.kwargs["parameter_source"], "adamw")
+        plan = json.loads(output.getvalue())
+        self.assertEqual(plan["parameter_source"], "adamw")
+        self.assertEqual(plan["model_parameters"], "lora")
+
     def test_jax_simple_loss_matches_latest_paper_probe_contracts(self) -> None:
         shape_timesteps = simple_loss_timesteps("shape3d", 1000)
         celeba_timesteps = simple_loss_timesteps("celeba", 1000)
@@ -109,11 +130,11 @@ class EvaluationTests(unittest.TestCase):
                 jobs = prepare_artbench_jobs(
                     output / "artbench2" / "evaluation",
                     method="pint", projection_dim=4096,
-                    parameter_sources=("raw", "adamw"), topk=2,
+                    parameter_source="adamw", topk=2,
                 )
-        self.assertEqual(len(jobs), 6)
+        self.assertEqual(len(jobs), 3)
         self.assertEqual({job.query_id for job in jobs}, {3, 7, 11})
-        self.assertEqual({job.parameter_source for job in jobs}, {"raw", "adamw"})
+        self.assertEqual({job.parameter_source for job in jobs}, {"adamw"})
 
     def test_artbench_ranking_matches_original_raw_and_adamw_orientations(self) -> None:
         self.assertEqual(artbench_ranking_sign("pint", "raw"), 1)

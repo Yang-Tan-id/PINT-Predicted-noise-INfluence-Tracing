@@ -55,8 +55,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--topk", type=int, default=1000)
     parser.add_argument("--metric-batch-size", type=int, default=16)
     parser.add_argument(
-        "--parameter-source", choices=("raw", "adamw", "both"), default="both",
-        help="ArtBench-2 only: attribution score set(s) used for removal",
+        "--parameter-source", choices=("raw", "adamw"), default="adamw",
+        help="ArtBench-2 only: attribution scores used for removal",
     )
     gpu = parser.add_mutually_exclusive_group()
     gpu.add_argument("--gpu-id", type=int)
@@ -69,19 +69,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     gpus = _gpu_ids(parser, args.gpu_id, args.gpu_ids)
     root = output_root() / args.experiment / "evaluation"
     if args.experiment == "artbench2":
-        sources = ("raw", "adamw") if args.parameter_source == "both" else (args.parameter_source,)
         jobs = prepare_artbench_jobs(
             root, method=args.method, projection_dim=args.projection_dim,
-            parameter_sources=sources, topk=args.topk,
+            parameter_source=args.parameter_source, topk=args.topk,
         )
         plan = {
             "kind": "topk_removal", "method": args.method, "topk": args.topk,
-            "parameter_sources": list(sources), "models": len(jobs),
+            "parameter_source": args.parameter_source, "models": len(jobs),
         }
     else:
         if args.method != "pint":
             parser.error("--method is used only by ArtBench-2 top-k removal evaluation")
-        if args.parameter_source != "both":
+        if args.parameter_source != "adamw":
             parser.error("--parameter-source is used only by ArtBench-2")
         jobs = prepare_lds_jobs(args.experiment, root)
         plan = {
@@ -98,7 +97,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             if args.experiment == "artbench2"
             else ["simple_loss", "trajectory_deviation"]
         ),
-        parameter_source="ema" if args.experiment != "artbench2" else "lora",
+        model_parameters="ema" if args.experiment != "artbench2" else "lora",
     )
     print(json.dumps(plan, indent=2))
     if args.dry_run:

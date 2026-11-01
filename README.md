@@ -145,8 +145,8 @@ For ArtBench-2:
   and LPIPS.
 - Uses PINT by default; select a baseline with `--method gas`,
   `--method tracincp`, or `--method retrac`.
-- Evaluates raw and AdamW scores by default; select one with
-  `--parameter-source raw` or `--parameter-source adamw`.
+- Retrains using AdamW scores by default; use `--parameter-source raw` to use
+  raw scores instead.
 
 ### 12. Evaluate models
 
@@ -154,10 +154,9 @@ For ArtBench-2:
 python 06_evaluate_models.py --gpu-ids 0,1,2,3
 ```
 
-This verifies every true-f result and computes only missing or incomplete ones;
-it never trains a missing model. Per-query results are written to
-`outputs/<dataset>/evaluation/reports/query_metrics.csv`, with mean/std summaries
-for every available method in `report.txt` in the same folder.
+Results are saved under `outputs/<dataset>/evaluation/reports/`: per-query
+metrics in `query_metrics.csv` and method-level mean/std summaries in
+`report.txt`.
 
 ## Validation
 

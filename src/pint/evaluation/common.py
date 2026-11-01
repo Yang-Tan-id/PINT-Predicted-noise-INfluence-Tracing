@@ -152,7 +152,7 @@ def prepare_artbench_jobs(
     *,
     method: str,
     projection_dim: int,
-    parameter_sources: tuple[str, ...],
+    parameter_source: str,
     topk: int,
 ) -> list[EvaluationJob]:
     scores_path = attribution_scores_path("artbench2", method, projection_dim)
@@ -193,44 +193,43 @@ def prepare_artbench_jobs(
         selected_rows = np.asarray(list(pickle.load(handle)), dtype=np.int64)
     if train_positions.min() < 0 or train_positions.max() >= len(selected_rows):
         raise ValueError("ArtBench-2 attribution train positions are out of range")
+    scores = arrays[parameter_source]
+    if scores is None:
+        raise RuntimeError(
+            f"{scores_path} has no AdamW scores; rerun step 04 without --no-adamw"
+        )
     jobs = []
-    for source in parameter_sources:
-        scores = arrays[source]
-        if scores is None:
-            raise RuntimeError(
-                f"{scores_path} has no AdamW scores; rerun step 04 without --no-adamw"
+    for row, query_id in enumerate(query_ids.tolist()):
+        removed_columns = _topk_columns(
+            scores[row], topk, artbench_ranking_sign(method, parameter_source)
+        )
+        removed_positions = set(train_positions[removed_columns].tolist())
+        kept_rows = np.asarray(
+            [value for position, value in enumerate(selected_rows) if position not in removed_positions],
+            dtype=np.int64,
+        )
+        model_dir = root / "topk_removal" / method / parameter_source / f"q{query_id:02d}"
+        model_dir.mkdir(parents=True, exist_ok=True)
+        indices_path = model_dir / "train_indices.pkl"
+        if indices_path.is_file():
+            with indices_path.open("rb") as handle:
+                existing = np.asarray(pickle.load(handle), dtype=np.int64)
+            if not np.array_equal(existing, kept_rows):
+                raise RuntimeError(f"existing removal set differs: {indices_path}")
+        else:
+            with indices_path.open("wb") as handle:
+                pickle.dump(kept_rows.tolist(), handle)
+        jobs.append(
+            EvaluationJob(
+                job_id=f"{method}_{parameter_source}_q{query_id:02d}",
+                experiment="artbench2",
+                output_dir=model_dir,
+                train_indices=indices_path,
+                query_id=query_id,
+                method=method,
+                parameter_source=parameter_source,
             )
-        for row, query_id in enumerate(query_ids.tolist()):
-            removed_columns = _topk_columns(
-                scores[row], topk, artbench_ranking_sign(method, source)
-            )
-            removed_positions = set(train_positions[removed_columns].tolist())
-            kept_rows = np.asarray(
-                [value for position, value in enumerate(selected_rows) if position not in removed_positions],
-                dtype=np.int64,
-            )
-            model_dir = root / "topk_removal" / method / source / f"q{query_id:02d}"
-            model_dir.mkdir(parents=True, exist_ok=True)
-            indices_path = model_dir / "train_indices.pkl"
-            if indices_path.is_file():
-                with indices_path.open("rb") as handle:
-                    existing = np.asarray(pickle.load(handle), dtype=np.int64)
-                if not np.array_equal(existing, kept_rows):
-                    raise RuntimeError(f"existing removal set differs: {indices_path}")
-            else:
-                with indices_path.open("wb") as handle:
-                    pickle.dump(kept_rows.tolist(), handle)
-            jobs.append(
-                EvaluationJob(
-                    job_id=f"{method}_{source}_q{query_id:02d}",
-                    experiment="artbench2",
-                    output_dir=model_dir,
-                    train_indices=indices_path,
-                    query_id=query_id,
-                    method=method,
-                    parameter_source=source,
-                )
-            )
+        )
     return jobs
 
 
