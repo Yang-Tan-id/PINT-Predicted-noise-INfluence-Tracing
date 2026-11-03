@@ -11,6 +11,7 @@ from typing import Sequence
 from pint.attribution.common import merge_shards
 from pint.baselines.common import BASELINE_METHODS, baseline_spec, run_tag
 from pint.config import EXPERIMENT_NAMES
+from pint.query_gradients.common import default_projection_dim_for
 from pint.training.cli import output_root
 
 
@@ -18,10 +19,12 @@ def attribution_plan(
     experiment: str,
     method: str,
     *,
-    projection_dim: int = 4096,
+    projection_dim: int | None = None,
     batch_size: int | None = None,
     scope: str | None = None,
 ) -> dict[str, object]:
+    if projection_dim is None:
+        projection_dim = default_projection_dim_for(experiment)
     spec = baseline_spec(method, experiment)
     tag = run_tag(spec, projection_dim)
     root = output_root() / experiment
@@ -47,7 +50,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Compute baseline attribution")
     parser.add_argument("--experiment", required=True, choices=EXPERIMENT_NAMES)
     parser.add_argument("--method", required=True, choices=BASELINE_METHODS)
-    parser.add_argument("--projection-dim", type=int, default=4096)
+    parser.add_argument("--projection-dim", type=int)
     parser.add_argument("--batch-size", type=int)
     parser.add_argument("--scope")
     parser.add_argument("--no-adamw", action="store_true")
@@ -56,6 +59,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     gpu.add_argument("--gpu-ids")
     parser.add_argument("--dry-run", action="store_true")
     args, backend_args = parser.parse_known_args(argv)
+    if args.projection_dim is None:
+        args.projection_dim = default_projection_dim_for(args.experiment)
     plan = attribution_plan(
         args.experiment,
         args.method,

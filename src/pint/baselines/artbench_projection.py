@@ -9,6 +9,10 @@ def artbench_seed(*parts: object) -> int:
     return int.from_bytes(hashlib.sha256(payload).digest()[:8], "little") & 0x7FFFFFFF
 
 
+def artbench_projection_seed(checkpoint_index: int) -> int:
+    return artbench_seed("sd_artbench", "projection", checkpoint_index)
+
+
 @dataclass(frozen=True)
 class ArtBenchProjector:
     """The global-coordinate CountSketch used by the ArtBench-2 originals."""

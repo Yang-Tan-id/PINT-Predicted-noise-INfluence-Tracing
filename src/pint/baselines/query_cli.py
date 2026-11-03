@@ -10,12 +10,16 @@ from typing import Sequence
 
 from pint.baselines.common import BASELINE_METHODS, baseline_spec, run_tag
 from pint.config import EXPERIMENT_NAMES
+from pint.query_gradients.common import default_projection_dim_for
 from pint.training.cli import output_root
 
 
 def query_plan(
-    experiment: str, method: str, *, projection_dim: int = 4096, batch_size: int | None = None
+    experiment: str, method: str, *, projection_dim: int | None = None,
+    batch_size: int | None = None
 ) -> dict[str, object]:
+    if projection_dim is None:
+        projection_dim = default_projection_dim_for(experiment)
     spec = baseline_spec(method, experiment)
     tag = run_tag(spec, projection_dim)
     if batch_size is None:
@@ -39,13 +43,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Compute baseline query features")
     parser.add_argument("--experiment", required=True, choices=EXPERIMENT_NAMES)
     parser.add_argument("--method", required=True, choices=BASELINE_METHODS)
-    parser.add_argument("--projection-dim", type=int, default=4096)
+    parser.add_argument("--projection-dim", type=int)
     parser.add_argument("--batch-size", type=int)
     gpu = parser.add_mutually_exclusive_group()
     gpu.add_argument("--gpu-id", type=int)
     gpu.add_argument("--gpu-ids")
     parser.add_argument("--dry-run", action="store_true")
     args, backend_args = parser.parse_known_args(argv)
+    if args.projection_dim is None:
+        args.projection_dim = default_projection_dim_for(args.experiment)
     if args.projection_dim <= 0:
         parser.error("--projection-dim must be positive")
     plan = query_plan(

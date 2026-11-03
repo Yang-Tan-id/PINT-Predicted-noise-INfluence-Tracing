@@ -8,7 +8,9 @@ from typing import Sequence
 
 import numpy as np
 
-from pint.baselines.artbench_projection import ArtBenchProjector, artbench_seed
+from pint.baselines.artbench_projection import (
+    ArtBenchProjector, artbench_projection_seed, artbench_seed,
+)
 from pint.baselines.common import (
     atomic_savez,
     baseline_spec,
@@ -29,7 +31,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument("--query-manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--projection-dim", type=int, default=4096)
+    parser.add_argument("--projection-dim", type=int, default=32768)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--model", default=ARTBENCH_MODEL_ID)
     parser.add_argument("--model-revision", default=ARTBENCH_MODEL_REVISION)
@@ -114,7 +116,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         active = [parameter for parameter in layers.parameters() if parameter.requires_grad]
         capture = LinearGradSampleCapture(unet, active) if args.method == "retrac" else None
         projector = ArtBenchProjector(
-            args.projection_dim, artbench_seed("sd_artbench", "projection", checkpoint_index)
+            args.projection_dim, artbench_projection_seed(checkpoint_index)
         )
         query_features = []
         for query_id, latent_cpu, hidden_cpu in zip(query_ids, latent_bank, hidden_bank):

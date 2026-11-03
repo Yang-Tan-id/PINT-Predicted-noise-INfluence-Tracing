@@ -13,7 +13,9 @@ import numpy as np
 
 from pint.query_gradients.cli import main, query_gradient_plan
 from pint.query_gradients.common import (
+    artbench_projection_seed_parts,
     checkpoint_pair_range,
+    default_projection_dim_for,
     normalization_for,
     timestep_count_for,
     timestep_grid,
@@ -62,7 +64,7 @@ class QueryGradientTests(unittest.TestCase):
             self.assertEqual((int(grid[0]), int(grid[-1])), (999, 19))
             self.assertEqual(timestep_count_for(experiment), 50)
 
-    def test_plan_defaults_to_4096_and_checkpoint_major(self) -> None:
+    def test_projection_defaults_and_checkpoint_major(self) -> None:
         with tempfile.TemporaryDirectory() as output:
             with patch.dict(os.environ, {"PINT_OUTPUT_ROOT": output}, clear=False):
                 plan = query_gradient_plan("shape3d")
@@ -70,6 +72,14 @@ class QueryGradientTests(unittest.TestCase):
         self.assertEqual(plan["timesteps"], 100)
         self.assertTrue(plan["checkpoint_major"])
         self.assertEqual(query_gradient_plan("celeba")["timesteps"], 50)
+        self.assertEqual(query_gradient_plan("artbench2")["projection_dim"], 32768)
+        self.assertEqual(default_projection_dim_for("x3"), 4096)
+        self.assertEqual(default_projection_dim_for("artbench2"), 32768)
+
+    def test_artbench_projection_seed_is_shared_per_checkpoint(self) -> None:
+        first = artbench_projection_seed_parts(7, 3)
+        self.assertEqual(first, artbench_projection_seed_parts(7, 3))
+        self.assertNotEqual(first, artbench_projection_seed_parts(7, 4))
 
     def test_cli_rejects_timestep_override(self) -> None:
         with self.assertRaises(SystemExit):

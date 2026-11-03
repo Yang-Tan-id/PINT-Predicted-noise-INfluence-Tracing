@@ -5,6 +5,7 @@ import unittest
 import numpy as np
 
 from pint.baselines.attribution_cli import attribution_plan
+from pint.baselines.artbench_projection import artbench_projection_seed
 from pint.baselines.common import baseline_spec, orient_adamw_scores, run_tag
 from pint.baselines.query_cli import query_plan
 
@@ -52,6 +53,15 @@ class BaselineTests(unittest.TestCase):
         self.assertEqual(query["tag"], attribution["tag"])
         self.assertIn("/methods/gas/queries", query["output"])
         self.assertEqual(attribution["parameter_sources"], ["raw_gradient", "adamw_full"])
+
+    def test_artbench_projection_default_and_checkpoint_seed_contract(self):
+        query = query_plan("artbench2", "gas")
+        attribution = attribution_plan("artbench2", "gas")
+        self.assertEqual(query["projection_dim"], 32768)
+        self.assertIn("projected32768", query["tag"])
+        self.assertEqual(query["tag"], attribution["tag"])
+        self.assertEqual(artbench_projection_seed(2), artbench_projection_seed(2))
+        self.assertNotEqual(artbench_projection_seed(2), artbench_projection_seed(3))
 
 
 if __name__ == "__main__":

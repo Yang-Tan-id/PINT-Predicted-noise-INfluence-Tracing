@@ -12,6 +12,7 @@ from typing import Sequence
 
 from pint.baselines.common import BASELINE_METHODS
 from pint.config import EXPERIMENT_NAMES
+from pint.query_gradients.common import default_projection_dim_for
 from pint.evaluation.common import (
     LDS_MODEL_COUNT, LDS_SUBSET_SIZES, merge_true_f, prepare_artbench_jobs,
     prepare_lds_jobs, true_f_complete,
@@ -51,7 +52,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--experiment", required=True, choices=EXPERIMENT_NAMES)
     parser.add_argument("--stage", choices=("train", "evaluate"), required=True)
     parser.add_argument("--method", choices=("pint", *BASELINE_METHODS), default="pint")
-    parser.add_argument("--projection-dim", type=int, default=4096)
+    parser.add_argument("--projection-dim", type=int)
     parser.add_argument("--topk", type=int, default=1000)
     parser.add_argument("--metric-batch-size", type=int, default=16)
     parser.add_argument(
@@ -64,6 +65,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args, backend_args = parser.parse_known_args(argv)
+    if args.projection_dim is None:
+        args.projection_dim = default_projection_dim_for(args.experiment)
     if args.projection_dim <= 0 or args.topk <= 0 or args.metric_batch_size <= 0:
         parser.error("--projection-dim, --topk, and --metric-batch-size must be positive")
     gpus = _gpu_ids(parser, args.gpu_id, args.gpu_ids)

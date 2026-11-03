@@ -55,6 +55,7 @@ class EvaluationTests(unittest.TestCase):
                     0,
                 )
         self.assertEqual(prepare.call_args.kwargs["parameter_source"], "adamw")
+        self.assertEqual(prepare.call_args.kwargs["projection_dim"], 32768)
         plan = json.loads(output.getvalue())
         self.assertEqual(plan["parameter_source"], "adamw")
         self.assertEqual(plan["model_parameters"], "lora")

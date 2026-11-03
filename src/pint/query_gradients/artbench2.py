@@ -10,6 +10,7 @@ from typing import Sequence
 import numpy as np
 
 from pint.query_gradients.common import (
+    artbench_projection_seed_parts,
     atomic_savez,
     checkpoint_pair_range,
     part_path,
@@ -93,7 +94,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--query-manifest", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--batch-size", type=int, default=2)
-    parser.add_argument("--projection-dim", type=int, default=4096)
+    parser.add_argument("--projection-dim", type=int, default=32768)
     parser.add_argument("--model", default=ARTBENCH_MODEL_ID)
     parser.add_argument("--model-revision", default=ARTBENCH_MODEL_REVISION)
     parser.add_argument("--shard-index", type=int, default=0, help=argparse.SUPPRESS)
@@ -237,11 +238,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             continue
         active = [parameter for parameter in current_layers.parameters() if parameter.requires_grad]
         projector = CountSketchProjector(
-            active,
-            args.projection_dim,
-            model_seed,
-            "traj_tracin_projection",
-            checkpoint_index,
+            active, args.projection_dim,
+            *artbench_projection_seed_parts(model_seed, checkpoint_index),
         )
         noise_bank = []
         generator = torch.Generator(device=device)

@@ -10,7 +10,9 @@ from typing import Sequence
 
 from pint.baselines.common import BASELINE_METHODS
 from pint.config import EXPERIMENT_NAMES
-from pint.query_gradients.common import normalization_for, timestep_count_for
+from pint.query_gradients.common import (
+    default_projection_dim_for, normalization_for, timestep_count_for,
+)
 from pint.training.cli import output_root
 
 
@@ -18,8 +20,10 @@ def query_gradient_plan(
     experiment: str,
     *,
     batch_size: int = 8,
-    projection_dim: int = 4096,
+    projection_dim: int | None = None,
 ) -> dict[str, object]:
+    if projection_dim is None:
+        projection_dim = default_projection_dim_for(experiment)
     timesteps = timestep_count_for(experiment)
     root = output_root() / experiment
     return {
@@ -56,7 +60,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--method", choices=("pint", *BASELINE_METHODS), default="pint"
     )
     parser.add_argument("--batch-size", type=int)
-    parser.add_argument("--projection-dim", type=int, default=4096)
+    parser.add_argument("--projection-dim", type=int)
     gpu_group = parser.add_mutually_exclusive_group()
     gpu_group.add_argument("--gpu-id", type=int)
     gpu_group.add_argument(
@@ -75,6 +79,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
     if args.batch_size is None:
         args.batch_size = 2 if args.experiment == "artbench2" else 8
+    if args.projection_dim is None:
+        args.projection_dim = default_projection_dim_for(args.experiment)
     if args.batch_size <= 0:
         parser.error("--batch-size must be positive")
     if args.projection_dim <= 0:

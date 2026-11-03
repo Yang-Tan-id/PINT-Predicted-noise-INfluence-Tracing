@@ -14,7 +14,9 @@ import numpy as np
 from pint.attribution.artbench2 import LinearGradSampleCapture, _checkpoint_optimizer_state
 from pint.attribution.common import datapoint_shard, save_shard
 from pint.attribution.torch_adamw import adamw_full_direction_batch
-from pint.baselines.artbench_projection import ArtBenchProjector, artbench_seed
+from pint.baselines.artbench_projection import (
+    ArtBenchProjector, artbench_projection_seed, artbench_seed,
+)
 from pint.baselines.common import (
     baseline_spec, load_query_run, orient_adamw_scores, run_tag,
     validate_query_source,
@@ -56,7 +58,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--query-manifest", type=Path, required=True)
     parser.add_argument("--query-dir", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--projection-dim", type=int, default=4096)
+    parser.add_argument("--projection-dim", type=int, default=32768)
     parser.add_argument("--scope", default="all")
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--no-adamw", action="store_true")
@@ -137,7 +139,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if torch.is_tensor(value):
                     state[key] = value.to(device)
         checkpoint_lr = float(optimizer.param_groups[0]["lr"])
-        projector = ArtBenchProjector(args.projection_dim, artbench_seed("sd_artbench", "projection", checkpoint_index))
+        projector = ArtBenchProjector(
+            args.projection_dim, artbench_projection_seed(checkpoint_index)
+        )
         query_features = torch.from_numpy(np.asarray(part["query_features"], dtype=np.float32)).to(device)
         if args.method == "retrac":
             training_dataset = IndexedArtBenchDataset(

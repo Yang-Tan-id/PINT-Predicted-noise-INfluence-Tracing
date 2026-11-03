@@ -23,7 +23,9 @@ from pint.query_gradients.artbench2 import (
     _checkpoints,
     _load_lora_checkpoint,
 )
-from pint.query_gradients.common import stable_torch_seed
+from pint.query_gradients.common import (
+    artbench_projection_seed_parts, stable_torch_seed,
+)
 from pint.query_gradients.torch_projector import CountSketchProjector
 from pint.training.model_versions import ARTBENCH_MODEL_ID, ARTBENCH_MODEL_REVISION
 
@@ -307,11 +309,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             optimizer.load_state_dict(_checkpoint_optimizer_state(checkpoints[checkpoint_index]))
         projector = CountSketchProjector(
-            active,
-            int(query_manifest["projection_dim"]),
-            model_seed,
-            "traj_tracin_projection",
-            checkpoint_index,
+            active, int(query_manifest["projection_dim"]),
+            *artbench_projection_seed_parts(model_seed, checkpoint_index),
         )
         learning_rate = _checkpoint_learning_rate(checkpoints[checkpoint_index])
         timesteps = np.asarray(part["timesteps"], dtype=np.int32)

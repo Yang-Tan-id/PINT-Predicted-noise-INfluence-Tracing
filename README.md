@@ -99,8 +99,9 @@ python 03_compute_query_gradients.py --gpu-id 0
 ```
 
 This runs PINT over the complete query bank in checkpoint-major order. Adjust
-query batching with `--batch-size N` and change the default 4096-dimensional
-projection with `--projection-dim N`. PINT uses 100 timesteps for x3 and
+query batching with `--batch-size N` and projection size with
+`--projection-dim N`. The default is 32,768 for ArtBench-2 and 4,096 for the
+other datasets. PINT uses 100 timesteps for x3 and
 Shape3D, and 50 for CelebA and ArtBench-2, matching query sampling. Use
 `--gpu-ids 0,1,2,3` to split consecutive checkpoint ranges across GPUs.
 
@@ -173,4 +174,4 @@ python -m unittest discover -s tests -v
   [`lambdalabs/miniSD-diffusers`](https://huggingface.co/lambda/miniSD-diffusers)
   at revision `26ed8a9bfbf76f46a6cf60517dde321f900c44ce`. The first run downloads it;
   later runs reuse the Hugging Face cache.
-- The `data/` and `outputs/` directories are ignored by Git.
+- The `data/` and `outputs/` directories are ignored.

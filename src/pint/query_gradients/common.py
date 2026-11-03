@@ -18,6 +18,16 @@ def timestep_count_for(experiment: str) -> int:
     return 100 if experiment in ("x3", "shape3d") else 50
 
 
+def default_projection_dim_for(experiment: str) -> int:
+    return 32768 if experiment == "artbench2" else 4096
+
+
+def artbench_projection_seed_parts(
+    model_seed: int, checkpoint_index: int
+) -> tuple[object, ...]:
+    return model_seed, "traj_tracin_projection", checkpoint_index
+
+
 def timestep_grid(experiment: str, total: int = 1000) -> np.ndarray:
     count = timestep_count_for(experiment)
     if experiment == "x3":
